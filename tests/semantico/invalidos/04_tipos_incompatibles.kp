@@ -1,0 +1,7 @@
+// espera: SEM-04@4 SEM-04@5 SEM-04@6 SEM-04@7
+var precio: monto<PEN> = 10.00 PEN;
+var cantidad: entero = 2;
+var nombre: monto<PEN> = "Elaris";
+var area: monto<PEN> = precio * precio;
+cantidad = 2.5;
+var bandera: booleano = cantidad y verdadero;

@@ -1,0 +1,5 @@
+// espera: SEM-02@3 SEM-02@5
+var total: monto<PEN> = 10.00 PEN;
+var total: monto<PEN> = 20.00 PEN;
+regla f(a: entero): entero { retornar a; }
+regla g(a: entero, a: decimal): entero { retornar 1; }

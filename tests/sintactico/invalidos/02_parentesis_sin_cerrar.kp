@@ -1,0 +1,4 @@
+// espera: SIN-01@2
+si (total > 700.00 PEN {
+    detraccion = total * 12%;
+}

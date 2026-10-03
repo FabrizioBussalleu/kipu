@@ -1,0 +1,11 @@
+// espera: OK
+var precio: monto<PEN> = 80.00 PEN;
+var cantidad: entero = 4;
+var descuento: porcentaje = 5%;
+var subtotal: monto<PEN> = precio * cantidad;
+subtotal -= subtotal * descuento;
+var ratio: decimal = subtotal / precio;
+var enDolares: monto<USD> = convertir(subtotal, USD, 3.75);
+var enEuros: monto<EUR> = convertir(enDolares, EUR, 0.92);
+var promedio: decimal = cantidad;
+var caro: booleano = precio >= 100.00 PEN o no (cantidad > 10);
