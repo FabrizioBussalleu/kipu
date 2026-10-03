@@ -1,0 +1,4 @@
+// espera: OK
+regla vacia() { }
+si (verdadero) { si (falso) { mientras (falso) { } } }
+{ { { } } }

@@ -1,0 +1,2 @@
+// espera: SIN-01@2
+regla calcularIgv(base: monto<PEN>): monto<PEN> retornar base * 18%;

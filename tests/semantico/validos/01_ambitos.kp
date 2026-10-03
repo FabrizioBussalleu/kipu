@@ -1,0 +1,9 @@
+// espera: OK
+// Una variable local puede ocultar a una global en un bloque interno
+var total: monto<PEN> = 100.00 PEN;
+si (total > 50.00 PEN) {
+    var total: monto<USD> = 10.00 USD;
+    mostrar(total);
+}
+para i desde 1 hasta 3 { mostrar(i); }
+para i desde 1 hasta 3 { mostrar(i * 2); }

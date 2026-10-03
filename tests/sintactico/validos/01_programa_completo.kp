@@ -1,0 +1,20 @@
+// espera: OK
+// Programa que combina todas las construcciones (solo validación sintáctica)
+const IGV: porcentaje = 18%;
+var saldo: monto<PEN> = 1200.00 PEN;
+var cuota: monto<PEN> = 300.00 PEN;
+var meses: entero = 0;
+
+regla calcularIgv(base: monto<PEN>): monto<PEN> { retornar base * IGV; }
+
+leer(meses);
+mientras (saldo > 0.00 PEN y meses < 12) {
+    saldo -= cuota;
+    meses += 1;
+    si (saldo < cuota) { cuota = saldo; } sino si (meses == 6) { mostrar("mitad"); } sino { }
+}
+para i desde 1 hasta meses paso 1 { mostrar("Cuota", i, calcularIgv(cuota)); }
+{
+    var local: decimal = -(3.75 * 2) / 1.5;
+}
+mostrar(convertir(saldo, USD, 3.75), no verdadero o falso);

@@ -1,0 +1,3 @@
+antlr4-python3-runtime==4.13.2
+# Opcional, solo para regenerar las derivaciones del informe:
+# lark>=1.1

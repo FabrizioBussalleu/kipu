@@ -1,0 +1,3 @@
+// espera: SIN-01@3
+var a: entero = 1;
+sino { a = 2; }

@@ -1,0 +1,3 @@
+// espera: SIN-01@3
+var cantidad: entero = 3
+var precio: monto<PEN> = 10.00 PEN;

@@ -1,0 +1,5 @@
+// espera: SEM-01@3 SEM-01@4 SEM-01@5
+var subtotal: monto<PEN> = 100.00 PEN;
+var total: monto<PEN> = subtotal + igv;
+flete = 20.00 PEN;
+var neto: monto<PEN> = calcularNeto(total);
