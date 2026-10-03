@@ -1,0 +1,6 @@
+// espera: SEM-03@4 SEM-03@5 SEM-03@6
+var soles: monto<PEN> = 100.00 PEN;
+var dolares: monto<USD> = 50.00 USD;
+var suma: monto<PEN> = soles + dolares;
+soles = dolares;
+si (soles > dolares) { mostrar("mayor"); }

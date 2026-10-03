@@ -1,0 +1,5 @@
+// espera: SEM-05@3 SEM-05@4 SEM-05@5
+const IGV: porcentaje = 18%;
+IGV = 10%;
+IGV += 1%;
+leer(IGV);

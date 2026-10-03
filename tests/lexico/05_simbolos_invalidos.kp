@@ -1,0 +1,4 @@
+// espera: LEX-01@2 LEX-01@3 LEX-01@4
+var total: monto<PEN> = 100 PEN # 5;
+var correo: texto = @usuario;
+var precio: decimal = $15.00;

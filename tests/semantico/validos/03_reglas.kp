@@ -1,0 +1,7 @@
+// espera: OK
+// Las reglas pueden invocarse antes de su definición
+var t: monto<PEN> = neto(1000.00 PEN, 12%);
+regla neto(total: monto<PEN>, tasa: porcentaje): monto<PEN> {
+    var descuento: monto<PEN> = total * tasa;
+    retornar total - descuento;
+}

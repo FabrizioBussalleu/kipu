@@ -1,0 +1,2 @@
+// espera: SIN-01@2
+para mes desde 1 12 { total += cuota; }

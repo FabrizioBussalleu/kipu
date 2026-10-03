@@ -1,0 +1,34 @@
+// espera: OK
+// Kipu: cálculo de una factura electrónica con IGV y detracción
+// Ejecutar: python src/kipu.py ejemplos/facturacion.kp
+
+const IGV: porcentaje = 18%;
+const TASA_DETRACCION: porcentaje = 12%;
+const UMBRAL_DETRACCION: monto<PEN> = 700.00 PEN;
+
+regla calcularIgv(base: monto<PEN>): monto<PEN> {
+    retornar base * IGV;
+}
+
+regla aplicaDetraccion(total: monto<PEN>): booleano {
+    retornar total > UMBRAL_DETRACCION;
+}
+
+var cantidad: entero = 3;
+var precioUnitario: monto<PEN> = 250.00 PEN;
+var subtotal: monto<PEN> = precioUnitario * cantidad;
+var igv: monto<PEN> = calcularIgv(subtotal);
+var total: monto<PEN> = subtotal + igv;
+var detraccion: monto<PEN> = 0.00 PEN;
+
+si (aplicaDetraccion(total)) {
+    detraccion = total * TASA_DETRACCION;
+    mostrar("Operación sujeta a detracción:", detraccion);
+} sino {
+    mostrar("Operación no sujeta a detracción");
+}
+
+var neto: monto<PEN> = total - detraccion;
+var netoDolares: monto<USD> = convertir(neto, USD, 3.75);
+mostrar("Subtotal:", subtotal, "IGV:", igv, "Total:", total);
+mostrar("Neto a cobrar:", neto, "Equivalente:", netoDolares);
