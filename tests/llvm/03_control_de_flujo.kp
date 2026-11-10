@@ -1,0 +1,14 @@
+// si / sino si / sino, mientras y para (ascendente y descendente)
+var tipo: entero = 2;
+si (tipo == 1) { mostrar("tipo 1"); } sino si (tipo == 2) { mostrar("tipo 2"); } sino { mostrar("otro"); }
+si (tipo > 5) { mostrar("no debe salir"); }
+var saldo: monto<PEN> = 100.00 PEN;
+var cuotas: entero = 0;
+mientras (saldo > 0.00 PEN) {
+    saldo -= 30.00 PEN;
+    cuotas += 1;
+}
+mostrar("cuotas:", cuotas, "saldo:", saldo);
+para i desde 1 hasta 9 paso 3 { mostrar("asc", i); }
+para j desde 3 hasta 1 paso -1 { mostrar("desc", j); }
+para k desde 5 hasta 1 { mostrar("nunca"); }

@@ -1,0 +1,14 @@
+// espera: SEM-11@2 SEM-11@5 SEM-11@10
+regla igv(base: monto<PEN>): monto<PEN> {
+    mostrar(base);
+}
+regla detraccion(total: monto<PEN>): monto<PEN> {
+    si (total > 700.00 PEN) {
+        retornar total * 12%;
+    }
+}
+regla tasa(tipo: entero): porcentaje {
+    mientras (tipo > 0) {
+        retornar 10%;
+    }
+}

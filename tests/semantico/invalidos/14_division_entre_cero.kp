@@ -1,0 +1,7 @@
+// espera: SEM-13@4 SEM-13@5 SEM-13@6 SEM-13@7
+var total: monto<PEN> = 300.00 PEN;
+var meses: entero = 12;
+var cuota: monto<PEN> = total / 0;
+var resto: entero = meses mod 0;
+var ratio: decimal = total / 0.00 PEN;
+var usd: monto<USD> = convertir(total, USD, 0.0);

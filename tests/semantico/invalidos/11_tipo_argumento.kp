@@ -1,0 +1,7 @@
+// espera: SEM-10@5 SEM-10@6 SEM-10@7
+regla calcularIgv(base: monto<PEN>): monto<PEN> { retornar base * 18%; }
+regla cuota(total: monto<PEN>, meses: entero): monto<PEN> { retornar total / meses; }
+var dolares: monto<USD> = 40.00 USD;
+var igv: monto<PEN> = calcularIgv(dolares);
+var c1: monto<PEN> = cuota(1200.00 PEN, 2.5);
+var c2: monto<PEN> = cuota("mil", 12);
