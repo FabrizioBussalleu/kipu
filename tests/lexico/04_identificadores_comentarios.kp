@@ -1,6 +1,4 @@
 // espera: OK
-// comentario de línea: se ignora
-/* comentario
-   de bloque */
-subtotal precioUnitario _interno año cuota2 TASA_DETRACCION
-si_aplica sinoCaso reglaBase variable1
+// comentario de línea: se ignora hasta el fin de la línea
+subtotal precioUnitario _interno año cuota2 TASA_DETRACCION // otro comentario
+si_aplica sinoCaso reglaBase variable1 montoTotal paraCada

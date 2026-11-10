@@ -1,0 +1,5 @@
+// espera: SEM-14@4 SEM-14@5
+regla cabecera() { mostrar("FACTURA ELECTRONICA"); }
+cabecera();
+var x: entero = cabecera();
+mostrar("Cabecera:", cabecera());

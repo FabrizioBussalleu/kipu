@@ -1,0 +1,5 @@
+// Conversión de moneda con tipo de cambio entero y decimal
+var soles: monto<PEN> = 1000.00 PEN;
+var dolares: monto<USD> = convertir(soles, USD, 0.2667);
+var euros: monto<EUR> = convertir(dolares, EUR, 0.92);
+mostrar(dolares, euros, convertir(12.34 USD, PEN, 3));

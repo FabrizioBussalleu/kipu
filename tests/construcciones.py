@@ -3,8 +3,8 @@
 Fuente única: las pruebas sintácticas (test_kipu.py), las derivaciones más a la
 izquierda (scripts/derivaciones.py) y el informe usan estos mismos ejemplos.
 
-Cada construcción indica la regla inicial de ANTLR con la que se valida y el
-símbolo inicial de la gramática libre de contexto del informe.
+Cada construcción indica la regla inicial de ANTLR con la que se valida, que es también el
+símbolo inicial de su gramática en el informe (la gramática del informe es la de Kipu.g4).
 """
 
 CONSTRUCCIONES = [
@@ -12,7 +12,7 @@ CONSTRUCCIONES = [
         "id": "G1",
         "nombre": "Declaración de variables y constantes",
         "regla_antlr": "declaracion",
-        "simbolo": "decl",
+        "simbolo": "declaracion",
         "ejemplos": [
             "var cantidad: entero = 3;",
             "const IGV: porcentaje = 18%;",
@@ -26,7 +26,7 @@ CONSTRUCCIONES = [
         "id": "G2",
         "nombre": "Asignación",
         "regla_antlr": "asignacion",
-        "simbolo": "asig",
+        "simbolo": "asignacion",
         "ejemplos": [
             "cantidad = 5;",
             "subtotal = precio * cantidad;",
@@ -40,7 +40,7 @@ CONSTRUCCIONES = [
         "id": "G3",
         "nombre": "Expresiones aritméticas, monetarias, relacionales y lógicas",
         "regla_antlr": "expresion",
-        "simbolo": "expr",
+        "simbolo": "expresion",
         "ejemplos": [
             "precio * cantidad + flete",
             "base * 18%",
@@ -54,7 +54,7 @@ CONSTRUCCIONES = [
         "id": "G4",
         "nombre": "Sentencias selectivas",
         "regla_antlr": "seleccion",
-        "simbolo": "sel",
+        "simbolo": "seleccion",
         "ejemplos": [
             "si (total > 700.00 PEN) { detraccion = total * 12%; }",
             "si (esExportacion) { igv = 0.00 PEN; } sino { igv = base * 18%; }",
@@ -68,7 +68,7 @@ CONSTRUCCIONES = [
         "id": "G5",
         "nombre": "Sentencias iterativas",
         "regla_antlr": "iteracion",
-        "simbolo": "iter",
+        "simbolo": "iteracion",
         "ejemplos": [
             "mientras (saldo > 0.00 PEN) { saldo -= cuota; }",
             "para mes desde 1 hasta 12 { total += cuota; }",
@@ -82,7 +82,7 @@ CONSTRUCCIONES = [
         "id": "G6",
         "nombre": "Reglas (funciones), retorno y llamadas",
         "regla_antlr": "regla",
-        "simbolo": "def_regla",
+        "simbolo": "regla",
         "ejemplos": [
             "regla calcularIgv(base: monto<PEN>): monto<PEN> { retornar base * 18%; }",
             "regla esMayor(a: entero, b: entero): booleano { retornar a > b; }",
@@ -96,7 +96,7 @@ CONSTRUCCIONES = [
         "id": "G7",
         "nombre": "Entrada y salida",
         "regla_antlr": "entradaSalida",
-        "simbolo": "es",
+        "simbolo": "entradaSalida",
         "ejemplos": [
             'mostrar("Total:", total);',
             "mostrar(subtotal + igv);",

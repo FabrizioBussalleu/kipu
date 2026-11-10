@@ -1,0 +1,26 @@
+// Kipu: liquidación de facturas con IGV, detracción y conversión a dólares.
+// Este programa usa solo construcciones soportadas por el back end del Hito 2.
+// Ejecutar: python src/kipu.py ejemplos/detracciones.kp --ejecutar
+
+const IGV: porcentaje = 18%;
+const TASA_DETRACCION: porcentaje = 12%;
+const UMBRAL: monto<PEN> = 700.00 PEN;
+const TIPO_CAMBIO: decimal = 3.75;
+
+var precio: monto<PEN> = 249.90 PEN;
+var totalCobrado: monto<PEN> = 0.00 PEN;
+
+para cantidad desde 1 hasta 4 {
+    var subtotal: monto<PEN> = precio * cantidad;
+    var igv: monto<PEN> = subtotal * IGV;
+    var total: monto<PEN> = subtotal + igv;
+    var detraccion: monto<PEN> = 0.00 PEN;
+    si (total > UMBRAL) {
+        detraccion = total * TASA_DETRACCION;
+    }
+    var neto: monto<PEN> = total - detraccion;
+    totalCobrado += neto;
+    mostrar("Factura", cantidad, "| total:", total, "| detracción:", detraccion, "| neto:", neto);
+}
+
+mostrar("Total cobrado:", totalCobrado, "=", convertir(totalCobrado, USD, 1.0 / TIPO_CAMBIO));

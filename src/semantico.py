@@ -1,59 +1,55 @@
-"""Analizador semántico de Kipu (Hito 1: verificación parcial).
+"""Analizador semántico de Kipu (Hito 2: verificación completa).
 
-Errores semánticos verificados en este hito:
+Recorre el AST, mantiene una tabla de símbolos con ámbitos anidados y calcula el tipo de cada
+expresión. Errores semánticos verificados:
+
   SEM-01  Identificador no declarado (variable, constante o regla).
-  SEM-02  Identificador redeclarado en el mismo ámbito.
-  SEM-03  Monedas incompatibles (operar o asignar montos de distinta moneda sin convertir).
-  SEM-04  Tipos incompatibles (asignación, inicialización u operación con tipos no permitidos).
-  SEM-05  Modificación de una constante.
+  SEM-02  Identificador redeclarado en el mismo ámbito (incluye parámetros y contador del para).
+  SEM-03  Monedas incompatibles (operar, comparar o asignar montos de distinta moneda).
+  SEM-04  Tipos incompatibles (asignación, inicialización, operación, límites del para, leer).
+  SEM-05  Modificación de una constante (asignación o leer).
+  SEM-06  Condición no booleana en si, sino si o mientras.
+  SEM-07  retornar fuera de una regla.
+  SEM-08  Valor de retorno incompatible con el tipo declarado de la regla.
+  SEM-09  Número de argumentos distinto al número de parámetros de la regla.
+  SEM-10  Tipo de argumento incompatible con el tipo del parámetro.
+  SEM-11  Regla con tipo de retorno que no retorna en todos los caminos.
+  SEM-12  Porcentaje literal fuera del rango 0 % a 100 %.
+  SEM-13  División o módulo entre cero literal.
+  SEM-14  Regla sin valor de retorno usada dentro de una expresión.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Optional
 
-from antlr4 import ParserRuleContext
-
+import ast_kipu as A
+from ast_kipu import BOOLEANO, DECIMAL, ENTERO, PORCENTAJE, TEXTO, Tipo
 from errores import ErrorCompilacion
-from generated.KipuParser import KipuParser
-from generated.KipuVisitor import KipuVisitor
 
-
-# ----------------------------------------------------------------------------
-# Sistema de tipos
-# ----------------------------------------------------------------------------
-@dataclass(frozen=True)
-class Tipo:
-    nombre: str                    # entero, decimal, porcentaje, booleano, texto, monto
-    moneda: Optional[str] = None   # solo para monto
-
-    def __str__(self) -> str:
-        return f"monto<{self.moneda}>" if self.nombre == "monto" else self.nombre
-
-    @property
-    def es_numerico(self) -> bool:
-        return self.nombre in ("entero", "decimal")
-
-    @property
-    def es_monto(self) -> bool:
-        return self.nombre == "monto"
-
-
-ENTERO = Tipo("entero")
-DECIMAL = Tipo("decimal")
-PORCENTAJE = Tipo("porcentaje")
-BOOLEANO = Tipo("booleano")
-TEXTO = Tipo("texto")
-
-
-def monto(moneda: str) -> Tipo:
-    return Tipo("monto", moneda)
+DESCRIPCION_ERRORES = {
+    "SEM-01": "Identificador no declarado",
+    "SEM-02": "Identificador redeclarado en el mismo ámbito",
+    "SEM-03": "Monedas incompatibles",
+    "SEM-04": "Tipos incompatibles",
+    "SEM-05": "Modificación de una constante",
+    "SEM-06": "Condición no booleana",
+    "SEM-07": "retornar fuera de una regla",
+    "SEM-08": "Valor de retorno incompatible",
+    "SEM-09": "Número de argumentos incorrecto",
+    "SEM-10": "Tipo de argumento incompatible",
+    "SEM-11": "Regla que no retorna en todos los caminos",
+    "SEM-12": "Porcentaje fuera de rango",
+    "SEM-13": "División entre cero",
+    "SEM-14": "Regla sin valor usada en una expresión",
+}
 
 
 # ----------------------------------------------------------------------------
 # Tabla de símbolos
 # ----------------------------------------------------------------------------
-@dataclass
+@dataclass(eq=False)
 class Simbolo:
     nombre: str
     categoria: str                 # variable, constante, parametro, regla, contador
@@ -61,6 +57,7 @@ class Simbolo:
     linea: int
     columna: int
     parametros: list = field(default_factory=list)   # solo reglas: lista de Tipo
+    ambito: str = ""
 
 
 @dataclass
@@ -96,43 +93,288 @@ class TablaSimbolos:
 
 
 # ----------------------------------------------------------------------------
-# Analizador semántico
+# Analizador
 # ----------------------------------------------------------------------------
-class AnalizadorSemantico(KipuVisitor):
+class AnalizadorSemantico:
     def __init__(self):
         self.tabla = TablaSimbolos()
         self.errores: list[ErrorCompilacion] = []
+        self.regla_actual: Optional[A.Regla] = None
 
-    # --- utilidades -------------------------------------------------------------
-    def _error(self, codigo: str, token_o_ctx, mensaje: str) -> None:
-        token = token_o_ctx.start if isinstance(token_o_ctx, ParserRuleContext) else token_o_ctx
-        self.errores.append(ErrorCompilacion("SEM", codigo, token.line, token.column + 1, mensaje))
+    # --- utilidades ---------------------------------------------------------------
+    def _error(self, codigo: str, nodo, mensaje: str) -> None:
+        self.errores.append(ErrorCompilacion("SEM", codigo, nodo.linea, nodo.columna, mensaje))
 
-    def _declarar(self, simbolo: Simbolo, token) -> None:
+    def _declarar(self, simbolo: Simbolo, nodo) -> Optional[Simbolo]:
         previo = self.tabla.actual.buscar_local(simbolo.nombre)
         if previo is not None:
-            self._error(
-                "SEM-02", token,
-                f"'{simbolo.nombre}' ya fue declarado en este ámbito (línea {previo.linea}).",
-            )
-            return
+            self._error("SEM-02", nodo, f"'{simbolo.nombre}' ya fue declarado en este ámbito (línea {previo.linea}).")
+            return None
+        simbolo.ambito = self.tabla.actual.nombre
         self.tabla.actual.simbolos[simbolo.nombre] = simbolo
+        return simbolo
 
-    def _compatible_asignacion(self, destino: Optional[Tipo], origen: Optional[Tipo], ctx, nombre: str) -> None:
+    @staticmethod
+    def compatible(destino: Optional[Tipo], origen: Optional[Tipo]) -> bool:
         if destino is None or origen is None or destino == origen:
-            return
-        if destino == DECIMAL and origen == ENTERO:          # ensanchamiento permitido
+            return True
+        return destino == DECIMAL and origen == ENTERO       # ensanchamiento permitido
+
+    def _verificar_asignable(self, destino, origen, nodo, que: str, codigo_tipo: str = "SEM-04") -> None:
+        if self.compatible(destino, origen):
             return
         if destino.es_monto and origen.es_monto:
-            self._error(
-                "SEM-03", ctx,
-                f"Monedas incompatibles: no se puede asignar {origen} a '{nombre}' de tipo {destino}; "
-                f"use convertir(expr, {destino.moneda}, tipo_cambio).",
-            )
+            self._error("SEM-03", nodo, f"Monedas incompatibles: no se puede asignar {origen} a {que} de tipo {destino}; "
+                                        f"use convertir(expr, {destino.moneda}, tipo_cambio).")
             return
-        self._error("SEM-04", ctx, f"Tipos incompatibles: no se puede asignar {origen} a '{nombre}' de tipo {destino}.")
+        self._error(codigo_tipo, nodo, f"Tipos incompatibles: no se puede asignar {origen} a {que} de tipo {destino}.")
 
-    def _tipo_aritmetico(self, op: str, a: Optional[Tipo], b: Optional[Tipo], ctx) -> Optional[Tipo]:
+    # --- recorrido ------------------------------------------------------------------
+    def analizar(self, programa: A.Programa) -> None:
+        # Primera pasada: registrar las reglas globales (permite llamadas antes de su definición).
+        for s in programa.sentencias:
+            if isinstance(s, A.Regla):
+                self._registrar_regla(s)
+        self._sentencias(programa.sentencias)
+        self.errores.sort(key=lambda e: (e.linea, e.columna))
+
+    def _sentencias(self, lista) -> None:
+        for s in lista:
+            self._sentencia(s)
+
+    def _sentencia(self, s) -> None:
+        metodo = getattr(self, "_s_" + type(s).__name__)
+        metodo(s)
+
+    def _bloque_nuevo_ambito(self, bloque: A.Bloque, nombre: str) -> None:
+        self.tabla.abrir(nombre)
+        self._sentencias(bloque.sentencias)
+        self.tabla.cerrar()
+
+    def _s_Bloque(self, b: A.Bloque) -> None:
+        self._bloque_nuevo_ambito(b, f"bloque (línea {b.linea})")
+
+    # 1. Declaraciones
+    def _s_Declaracion(self, d: A.Declaracion) -> None:
+        if d.valor is not None:
+            self._verificar_asignable(d.tipo_decl, self._expr(d.valor), d.valor, f"'{d.nombre}'")
+        categoria = "constante" if d.constante else "variable"
+        d.simbolo = self._declarar(Simbolo(d.nombre, categoria, d.tipo_decl, d.linea, d.columna), d)
+
+    # 2. Asignación
+    def _s_Asignacion(self, a: A.Asignacion) -> None:
+        tipo_valor = self._expr(a.valor)
+        sim = self.tabla.actual.buscar(a.nombre)
+        if sim is None:
+            self._error("SEM-01", a, f"'{a.nombre}' no ha sido declarado.")
+            return
+        a.simbolo = sim
+        if sim.categoria == "constante":
+            self._error("SEM-05", a, f"No se puede modificar la constante '{a.nombre}'.")
+            return
+        if sim.categoria == "regla":
+            self._error("SEM-04", a, f"'{a.nombre}' es una regla y no puede recibir una asignación.")
+            return
+        if a.op in ("+=", "-="):
+            tipo_valor = self._tipo_binario(a.op[0], sim.tipo, tipo_valor, a.valor, a)
+        self._verificar_asignable(sim.tipo, tipo_valor, a.valor, f"'{a.nombre}'")
+
+    # 4. Selectiva
+    def _condicion(self, expr: A.Expr, donde: str) -> None:
+        t = self._expr(expr)
+        if t is not None and t != BOOLEANO:
+            self._error("SEM-06", expr, f"La condición de '{donde}' debe ser booleana; se recibió {t}.")
+
+    def _s_Si(self, s: A.Si) -> None:
+        for i, (cond, bloque) in enumerate(s.ramas):
+            self._condicion(cond, "si" if i == 0 else "sino si")
+            self._s_Bloque(bloque)
+        if s.sino is not None:
+            self._s_Bloque(s.sino)
+
+    # 5. Iterativas
+    def _s_Mientras(self, m: A.Mientras) -> None:
+        self._condicion(m.condicion, "mientras")
+        self._s_Bloque(m.cuerpo)
+
+    def _s_Para(self, p: A.Para) -> None:
+        for nombre, expr in (("desde", p.desde), ("hasta", p.hasta), ("paso", p.paso)):
+            if expr is None:
+                continue
+            t = self._expr(expr)
+            if t is not None and t != ENTERO:
+                self._error("SEM-04", expr, f"Tipos incompatibles: el límite '{nombre}' del para debe ser entero, se recibió {t}.")
+        self.tabla.abrir(f"para {p.variable} (línea {p.linea})")
+        p.simbolo = self._declarar(Simbolo(p.variable, "contador", ENTERO, p.linea, p.columna), p)
+        # El cuerpo comparte ámbito con el contador: redeclararlo dentro es SEM-02.
+        self._sentencias(p.cuerpo.sentencias)
+        self.tabla.cerrar()
+
+    # 6. Reglas
+    def _registrar_regla(self, r: A.Regla) -> None:
+        sim = Simbolo(r.nombre, "regla", r.tipo_retorno, r.linea, r.columna, [p.tipo_decl for p in r.parametros])
+        r.simbolo = self._declarar(sim, r)
+        r.registrada = True
+
+    def _s_Regla(self, r: A.Regla) -> None:
+        if not getattr(r, "registrada", False):
+            self._registrar_regla(r)
+        anterior, self.regla_actual = self.regla_actual, r
+        self.tabla.abrir(f"regla {r.nombre}")
+        for p in r.parametros:
+            p.simbolo = self._declarar(Simbolo(p.nombre, "parametro", p.tipo_decl, p.linea, p.columna), p)
+        self._sentencias(r.cuerpo.sentencias)
+        self.tabla.cerrar()
+        if r.tipo_retorno is not None and not self._retorna_siempre(r.cuerpo.sentencias):
+            self._error("SEM-11", r, f"La regla '{r.nombre}' declara tipo {r.tipo_retorno} pero no retorna un valor en todos los caminos.")
+        self.regla_actual = anterior
+
+    def _retorna_siempre(self, sentencias) -> bool:
+        for s in sentencias:
+            if isinstance(s, A.Retornar):
+                return True
+            if isinstance(s, A.Bloque) and self._retorna_siempre(s.sentencias):
+                return True
+            if isinstance(s, A.Si) and s.sino is not None:
+                ramas = [b for _, b in s.ramas] + [s.sino]
+                if all(self._retorna_siempre(b.sentencias) for b in ramas):
+                    return True
+        return False
+
+    def _s_Retornar(self, r: A.Retornar) -> None:
+        tipo_valor = self._expr(r.valor) if r.valor is not None else None
+        regla = self.regla_actual
+        if regla is None:
+            self._error("SEM-07", r, "'retornar' solo puede usarse dentro de una regla.")
+            return
+        esperado = regla.tipo_retorno
+        if esperado is None and r.valor is not None:
+            self._error("SEM-08", r, f"La regla '{regla.nombre}' no declara tipo de retorno y no puede retornar un valor.")
+        elif esperado is not None and r.valor is None:
+            self._error("SEM-08", r, f"La regla '{regla.nombre}' debe retornar un valor de tipo {esperado}.")
+        elif esperado is not None and not self.compatible(esperado, tipo_valor):
+            detalle = "moneda distinta" if (esperado.es_monto and tipo_valor.es_monto) else "tipo distinto"
+            self._error("SEM-08", r.valor, f"Valor de retorno incompatible ({detalle}): la regla '{regla.nombre}' "
+                                           f"retorna {esperado} y se intenta retornar {tipo_valor}.")
+
+    def _s_LlamadaSentencia(self, s: A.LlamadaSentencia) -> None:
+        self._llamada(s.llamada, en_expresion=False)
+
+    # 7. Entrada y salida
+    def _s_Mostrar(self, m: A.Mostrar) -> None:
+        for arg in m.args:
+            self._expr(arg)
+
+    def _s_Leer(self, l: A.Leer) -> None:
+        sim = self.tabla.actual.buscar(l.nombre)
+        if sim is None:
+            self._error("SEM-01", l, f"'{l.nombre}' no ha sido declarado.")
+        elif sim.categoria == "constante":
+            self._error("SEM-05", l, f"No se puede leer un valor sobre la constante '{l.nombre}'.")
+        elif sim.categoria == "regla":
+            self._error("SEM-04", l, f"'{l.nombre}' es una regla; leer requiere una variable.")
+        else:
+            l.simbolo = sim
+
+    # --- expresiones -----------------------------------------------------------------
+    def _expr(self, e: A.Expr) -> Optional[Tipo]:
+        e.tipo = getattr(self, "_e_" + type(e).__name__)(e)
+        return e.tipo
+
+    def _e_Literal(self, e: A.Literal) -> Tipo:
+        if e.clase == "porcentaje":
+            if not (Decimal(0) <= e.valor <= Decimal(100)):
+                self._error("SEM-12", e, f"Porcentaje fuera de rango: {e.valor}% (debe estar entre 0% y 100%).")
+            return PORCENTAJE
+        if e.clase == "monto":
+            return A.monto(e.moneda)
+        return Tipo(e.clase)
+
+    def _e_Variable(self, e: A.Variable) -> Optional[Tipo]:
+        sim = self.tabla.actual.buscar(e.nombre)
+        if sim is None:
+            self._error("SEM-01", e, f"'{e.nombre}' no ha sido declarado.")
+            return None
+        if sim.categoria == "regla":
+            self._error("SEM-04", e, f"'{e.nombre}' es una regla; debe invocarse con paréntesis.")
+            return None
+        e.simbolo = sim
+        return sim.tipo
+
+    def _e_Llamada(self, e: A.Llamada) -> Optional[Tipo]:
+        return self._llamada(e, en_expresion=True)
+
+    def _llamada(self, e: A.Llamada, en_expresion: bool) -> Optional[Tipo]:
+        tipos_args = [self._expr(a) for a in e.args]
+        sim = self.tabla.actual.buscar(e.nombre)
+        if sim is None:
+            self._error("SEM-01", e, f"La regla '{e.nombre}' no ha sido declarada.")
+            return None
+        if sim.categoria != "regla":
+            self._error("SEM-04", e, f"'{e.nombre}' es de tipo {sim.tipo} y no puede invocarse como regla.")
+            return None
+        e.simbolo = sim
+        if len(tipos_args) != len(sim.parametros):
+            self._error("SEM-09", e, f"La regla '{e.nombre}' espera {len(sim.parametros)} argumento(s) y recibió {len(tipos_args)}.")
+        else:
+            for i, (esperado, recibido, arg) in enumerate(zip(sim.parametros, tipos_args, e.args), 1):
+                if not self.compatible(esperado, recibido):
+                    self._error("SEM-10", arg, f"Argumento {i} de '{e.nombre}': se esperaba {esperado} y se recibió {recibido}.")
+        if en_expresion and sim.tipo is None:
+            self._error("SEM-14", e, f"La regla '{e.nombre}' no retorna un valor y no puede usarse en una expresión.")
+        return sim.tipo
+
+    def _e_Conversion(self, e: A.Conversion) -> Tipo:
+        origen = self._expr(e.expr)
+        tasa = self._expr(e.tasa)
+        if origen is not None and not origen.es_monto:
+            self._error("SEM-04", e.expr, f"convertir(...) requiere un monto como primer argumento, se recibió {origen}.")
+        if tasa is not None and not tasa.es_numerico:
+            self._error("SEM-04", e.tasa, f"El tipo de cambio debe ser entero o decimal, se recibió {tasa}.")
+        if isinstance(e.tasa, A.Literal) and e.tasa.clase in ("entero", "decimal") and e.tasa.valor == 0:
+            self._error("SEM-13", e.tasa, "El tipo de cambio no puede ser cero.")
+        return A.monto(e.moneda)
+
+    def _e_Unaria(self, e: A.Unaria) -> Optional[Tipo]:
+        t = self._expr(e.expr)
+        if e.op == "no":
+            if t is not None and t != BOOLEANO:
+                self._error("SEM-04", e, f"Tipos incompatibles: el operador 'no' requiere booleano, se recibió {t}.")
+            return BOOLEANO
+        if t is not None and not (t.es_numerico or t.es_monto or t == PORCENTAJE):
+            self._error("SEM-04", e, f"Tipos incompatibles: el operador '-' no se aplica a {t}.")
+            return None
+        return t
+
+    def _e_Binaria(self, e: A.Binaria) -> Optional[Tipo]:
+        a, b = self._expr(e.izq), self._expr(e.der)
+        if e.op in ("y", "o"):
+            for lado, t in ((e.izq, a), (e.der, b)):
+                if t is not None and t != BOOLEANO:
+                    self._error("SEM-04", lado, f"Tipos incompatibles: el operador '{e.op}' requiere booleanos, se recibió {t}.")
+            return BOOLEANO
+        if e.op in ("==", "!=", "<", "<=", ">", ">="):
+            return self._comparar(e, a, b)
+        if e.op in ("/", "mod") and isinstance(e.der, A.Literal) and e.der.clase in ("entero", "decimal", "monto", "porcentaje") \
+                and e.der.valor == 0:
+            self._error("SEM-13", e.der, f"División entre cero: el divisor de '{e.op}' es el literal {e.der.valor}.")
+        return self._tipo_binario(e.op, a, b, e, e)
+
+    def _comparar(self, e: A.Binaria, a, b) -> Tipo:
+        if a is None or b is None:
+            return BOOLEANO
+        if a.es_numerico and b.es_numerico:
+            return BOOLEANO
+        if a.es_monto and b.es_monto:
+            if a.moneda != b.moneda:
+                self._error("SEM-03", e, f"Monedas incompatibles: no se puede comparar {a} con {b}.")
+            return BOOLEANO
+        if a == b and (e.op in ("==", "!=") or a == PORCENTAJE):
+            return BOOLEANO
+        self._error("SEM-04", e, f"Tipos incompatibles: no se puede comparar {a} con {b} usando '{e.op}'.")
+        return BOOLEANO
+
+    def _tipo_binario(self, op: str, a, b, nodo_error, nodo) -> Optional[Tipo]:
         if a is None or b is None:
             return None
         if op in ("+", "-"):
@@ -141,7 +383,7 @@ class AnalizadorSemantico(KipuVisitor):
             if a.es_monto and b.es_monto:
                 if a.moneda != b.moneda:
                     verbo = "sumar" if op == "+" else "restar"
-                    self._error("SEM-03", ctx, f"Monedas incompatibles: no se puede {verbo} {a} con {b}; use convertir(...).")
+                    self._error("SEM-03", nodo_error, f"Monedas incompatibles: no se puede {verbo} {a} con {b}; use convertir(...).")
                     return None
                 return a
             if a == PORCENTAJE and b == PORCENTAJE:
@@ -164,7 +406,7 @@ class AnalizadorSemantico(KipuVisitor):
                 return a
             if a.es_monto and b.es_monto:
                 if a.moneda != b.moneda:
-                    self._error("SEM-03", ctx, f"Monedas incompatibles: no se puede dividir {a} entre {b}.")
+                    self._error("SEM-03", nodo_error, f"Monedas incompatibles: no se puede dividir {a} entre {b}.")
                     return None
                 return DECIMAL
             if a == PORCENTAJE and b.es_numerico:
@@ -172,268 +414,5 @@ class AnalizadorSemantico(KipuVisitor):
         elif op == "mod":
             if a == ENTERO and b == ENTERO:
                 return ENTERO
-        self._error("SEM-04", ctx, f"Tipos incompatibles: la operación '{op}' no está definida entre {a} y {b}.")
+        self._error("SEM-04", nodo_error, f"Tipos incompatibles: la operación '{op}' no está definida entre {a} y {b}.")
         return None
-
-    # --- programa y sentencias ---------------------------------------------------
-    def visitPrograma(self, ctx: KipuParser.ProgramaContext):
-        # Primera pasada: registrar reglas globales para permitir llamadas antes de su definición.
-        for sent in ctx.sentencia():
-            if sent.regla() is not None:
-                self._registrar_regla(sent.regla())
-        for sent in ctx.sentencia():
-            self.visit(sent)
-        self.errores.sort(key=lambda e: (e.linea, e.columna))
-        return None
-
-    def _registrar_regla(self, ctx: KipuParser.ReglaContext) -> Simbolo:
-        tipo_ret = self.visit(ctx.tipo()) if ctx.tipo() is not None else None
-        params = []
-        if ctx.parametros() is not None:
-            params = [self.visit(p.tipo()) for p in ctx.parametros().parametro()]
-        simbolo = Simbolo(ctx.ID().getText(), "regla", tipo_ret, ctx.ID().symbol.line, ctx.ID().symbol.column, params)
-        self._declarar(simbolo, ctx.ID().symbol)
-        ctx.registrada = True
-        return simbolo
-
-    def visitBloque(self, ctx: KipuParser.BloqueContext):
-        self.tabla.abrir(f"bloque (línea {ctx.start.line})")
-        for sent in ctx.sentencia():
-            self.visit(sent)
-        self.tabla.cerrar()
-        return None
-
-    # 1. Declaraciones -------------------------------------------------------------
-    def visitDeclaracionVariable(self, ctx: KipuParser.DeclaracionVariableContext):
-        tipo = self.visit(ctx.tipo())
-        nombre = ctx.ID().getText()
-        if ctx.expresion() is not None:
-            self._compatible_asignacion(tipo, self.visit(ctx.expresion()), ctx.expresion(), nombre)
-        self._declarar(Simbolo(nombre, "variable", tipo, ctx.ID().symbol.line, ctx.ID().symbol.column), ctx.ID().symbol)
-        return None
-
-    def visitDeclaracionConstante(self, ctx: KipuParser.DeclaracionConstanteContext):
-        tipo = self.visit(ctx.tipo())
-        nombre = ctx.ID().getText()
-        self._compatible_asignacion(tipo, self.visit(ctx.expresion()), ctx.expresion(), nombre)
-        self._declarar(Simbolo(nombre, "constante", tipo, ctx.ID().symbol.line, ctx.ID().symbol.column), ctx.ID().symbol)
-        return None
-
-    def visitTipoEntero(self, ctx):
-        return ENTERO
-
-    def visitTipoDecimal(self, ctx):
-        return DECIMAL
-
-    def visitTipoPorcentaje(self, ctx):
-        return PORCENTAJE
-
-    def visitTipoBooleano(self, ctx):
-        return BOOLEANO
-
-    def visitTipoTexto(self, ctx):
-        return TEXTO
-
-    def visitTipoMonto(self, ctx: KipuParser.TipoMontoContext):
-        return monto(ctx.MONEDA().getText())
-
-    # 2. Asignación ------------------------------------------------------------------
-    def visitAsignacion(self, ctx: KipuParser.AsignacionContext):
-        nombre = ctx.ID().getText()
-        tipo_expr = self.visit(ctx.expresion())
-        simbolo = self.tabla.actual.buscar(nombre)
-        if simbolo is None:
-            self._error("SEM-01", ctx.ID().symbol, f"'{nombre}' no ha sido declarado.")
-            return None
-        if simbolo.categoria == "constante":
-            self._error("SEM-05", ctx.ID().symbol, f"No se puede modificar la constante '{nombre}'.")
-            return None
-        if simbolo.categoria == "regla":
-            self._error("SEM-04", ctx.ID().symbol, f"'{nombre}' es una regla y no puede recibir una asignación.")
-            return None
-        op = ctx.op.text
-        if op in ("+=", "-="):
-            tipo_expr = self._tipo_aritmetico(op[0], simbolo.tipo, tipo_expr, ctx.expresion())
-        self._compatible_asignacion(simbolo.tipo, tipo_expr, ctx.expresion(), nombre)
-        return None
-
-    # 4 y 5. Control de flujo ----------------------------------------------------------
-    def visitSeleccion(self, ctx: KipuParser.SeleccionContext):
-        for expr in ctx.expresion():
-            self.visit(expr)
-        for bloque in ctx.bloque():
-            self.visit(bloque)
-        return None
-
-    def visitIterMientras(self, ctx: KipuParser.IterMientrasContext):
-        self.visit(ctx.expresion())
-        self.visit(ctx.bloque())
-        return None
-
-    def visitIterPara(self, ctx: KipuParser.IterParaContext):
-        for expr in ctx.expresion():
-            self.visit(expr)
-        self.tabla.abrir(f"para {ctx.ID().getText()} (línea {ctx.start.line})")
-        self._declarar(Simbolo(ctx.ID().getText(), "contador", ENTERO, ctx.ID().symbol.line, ctx.ID().symbol.column), ctx.ID().symbol)
-        # El cuerpo comparte ámbito con el contador: redeclararlo dentro es un error (SEM-02).
-        for sent in ctx.bloque().sentencia():
-            self.visit(sent)
-        self.tabla.cerrar()
-        return None
-
-    # 6. Reglas --------------------------------------------------------------------------
-    def visitRegla(self, ctx: KipuParser.ReglaContext):
-        if not getattr(ctx, "registrada", False):     # regla anidada: se registra al visitarla
-            self._registrar_regla(ctx)
-        self.tabla.abrir(f"regla {ctx.ID().getText()}")
-        if ctx.parametros() is not None:
-            for p in ctx.parametros().parametro():
-                self._declarar(
-                    Simbolo(p.ID().getText(), "parametro", self.visit(p.tipo()), p.ID().symbol.line, p.ID().symbol.column),
-                    p.ID().symbol,
-                )
-        for sent in ctx.bloque().sentencia():
-            self.visit(sent)
-        self.tabla.cerrar()
-        return None
-
-    def visitRetorno(self, ctx: KipuParser.RetornoContext):
-        if ctx.expresion() is not None:
-            self.visit(ctx.expresion())
-        return None
-
-    def visitLlamada(self, ctx: KipuParser.LlamadaContext):
-        nombre = ctx.ID().getText()
-        if ctx.argumentos() is not None:
-            for arg in ctx.argumentos().expresion():
-                self.visit(arg)
-        simbolo = self.tabla.actual.buscar(nombre)
-        if simbolo is None:
-            self._error("SEM-01", ctx.ID().symbol, f"La regla '{nombre}' no ha sido declarada.")
-            return None
-        if simbolo.categoria != "regla":
-            self._error("SEM-04", ctx.ID().symbol, f"'{nombre}' es de tipo {simbolo.tipo} y no puede invocarse como regla.")
-            return None
-        return simbolo.tipo
-
-    def visitLlamadaSentencia(self, ctx):
-        self.visit(ctx.llamada())
-        return None
-
-    # 7. Entrada y salida ---------------------------------------------------------------
-    def visitSalida(self, ctx: KipuParser.SalidaContext):
-        for arg in ctx.argumentos().expresion():
-            self.visit(arg)
-        return None
-
-    def visitEntrada(self, ctx: KipuParser.EntradaContext):
-        nombre = ctx.ID().getText()
-        simbolo = self.tabla.actual.buscar(nombre)
-        if simbolo is None:
-            self._error("SEM-01", ctx.ID().symbol, f"'{nombre}' no ha sido declarado.")
-        elif simbolo.categoria == "constante":
-            self._error("SEM-05", ctx.ID().symbol, f"No se puede leer un valor sobre la constante '{nombre}'.")
-        return None
-
-    # 3. Expresiones ----------------------------------------------------------------------
-    def visitExprParentesis(self, ctx):
-        return self.visit(ctx.expresion())
-
-    def visitExprLlamada(self, ctx):
-        return self.visit(ctx.llamada())
-
-    def visitExprConversion(self, ctx: KipuParser.ExprConversionContext):
-        origen = self.visit(ctx.expresion(0))
-        tasa = self.visit(ctx.expresion(1))
-        if origen is not None and not origen.es_monto:
-            self._error("SEM-04", ctx.expresion(0), f"convertir(...) requiere un monto como primer argumento, se recibió {origen}.")
-        if tasa is not None and not tasa.es_numerico:
-            self._error("SEM-04", ctx.expresion(1), f"El tipo de cambio debe ser entero o decimal, se recibió {tasa}.")
-        return monto(ctx.MONEDA().getText())
-
-    def visitExprNegativo(self, ctx):
-        t = self.visit(ctx.expresion())
-        if t is not None and not (t.es_numerico or t.es_monto or t == PORCENTAJE):
-            self._error("SEM-04", ctx, f"Tipos incompatibles: el operador '-' no se aplica a {t}.")
-            return None
-        return t
-
-    def visitExprNo(self, ctx):
-        t = self.visit(ctx.expresion())
-        if t is not None and t != BOOLEANO:
-            self._error("SEM-04", ctx, f"Tipos incompatibles: el operador 'no' requiere booleano, se recibió {t}.")
-        return BOOLEANO
-
-    def visitExprMultiplicativa(self, ctx):
-        return self._tipo_aritmetico(ctx.op.text, self.visit(ctx.expresion(0)), self.visit(ctx.expresion(1)), ctx)
-
-    def visitExprAditiva(self, ctx):
-        return self._tipo_aritmetico(ctx.op.text, self.visit(ctx.expresion(0)), self.visit(ctx.expresion(1)), ctx)
-
-    def _comparar(self, ctx, solo_orden: bool):
-        a, b = self.visit(ctx.expresion(0)), self.visit(ctx.expresion(1))
-        op = ctx.op.text
-        if a is None or b is None:
-            return BOOLEANO
-        if a.es_numerico and b.es_numerico:
-            return BOOLEANO
-        if a.es_monto and b.es_monto:
-            if a.moneda != b.moneda:
-                self._error("SEM-03", ctx, f"Monedas incompatibles: no se puede comparar {a} con {b}.")
-            return BOOLEANO
-        if a == b and (not solo_orden or a == PORCENTAJE):
-            return BOOLEANO
-        self._error("SEM-04", ctx, f"Tipos incompatibles: no se puede comparar {a} con {b} usando '{op}'.")
-        return BOOLEANO
-
-    def visitExprRelacional(self, ctx):
-        return self._comparar(ctx, solo_orden=True)
-
-    def visitExprIgualdad(self, ctx):
-        return self._comparar(ctx, solo_orden=False)
-
-    def _logica(self, ctx, op: str):
-        for expr in ctx.expresion():
-            t = self.visit(expr)
-            if t is not None and t != BOOLEANO:
-                self._error("SEM-04", expr, f"Tipos incompatibles: el operador '{op}' requiere booleanos, se recibió {t}.")
-        return BOOLEANO
-
-    def visitExprY(self, ctx):
-        return self._logica(ctx, "y")
-
-    def visitExprO(self, ctx):
-        return self._logica(ctx, "o")
-
-    def visitExprLiteral(self, ctx):
-        return self.visit(ctx.literal())
-
-    def visitExprVariable(self, ctx):
-        nombre = ctx.ID().getText()
-        simbolo = self.tabla.actual.buscar(nombre)
-        if simbolo is None:
-            self._error("SEM-01", ctx.ID().symbol, f"'{nombre}' no ha sido declarado.")
-            return None
-        if simbolo.categoria == "regla":
-            self._error("SEM-04", ctx.ID().symbol, f"'{nombre}' es una regla; debe invocarse con paréntesis.")
-            return None
-        return simbolo.tipo
-
-    # Literales -----------------------------------------------------------------------------
-    def visitLitMonto(self, ctx):
-        return monto(ctx.MONEDA().getText())
-
-    def visitLitEntero(self, ctx):
-        return ENTERO
-
-    def visitLitDecimal(self, ctx):
-        return DECIMAL
-
-    def visitLitPorcentaje(self, ctx):
-        return PORCENTAJE
-
-    def visitLitTexto(self, ctx):
-        return TEXTO
-
-    def visitLitBooleano(self, ctx):
-        return BOOLEANO

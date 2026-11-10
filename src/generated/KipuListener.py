@@ -17,6 +17,15 @@ class KipuListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by KipuParser#listaSentencias.
+    def enterListaSentencias(self, ctx:KipuParser.ListaSentenciasContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#listaSentencias.
+    def exitListaSentencias(self, ctx:KipuParser.ListaSentenciasContext):
+        pass
+
+
     # Enter a parse tree produced by KipuParser#sentencia.
     def enterSentencia(self, ctx:KipuParser.SentenciaContext):
         pass
@@ -35,75 +44,30 @@ class KipuListener(ParseTreeListener):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#declaracionVariable.
-    def enterDeclaracionVariable(self, ctx:KipuParser.DeclaracionVariableContext):
+    # Enter a parse tree produced by KipuParser#declaracion.
+    def enterDeclaracion(self, ctx:KipuParser.DeclaracionContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#declaracionVariable.
-    def exitDeclaracionVariable(self, ctx:KipuParser.DeclaracionVariableContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#declaracionConstante.
-    def enterDeclaracionConstante(self, ctx:KipuParser.DeclaracionConstanteContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#declaracionConstante.
-    def exitDeclaracionConstante(self, ctx:KipuParser.DeclaracionConstanteContext):
+    # Exit a parse tree produced by KipuParser#declaracion.
+    def exitDeclaracion(self, ctx:KipuParser.DeclaracionContext):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#tipoEntero.
-    def enterTipoEntero(self, ctx:KipuParser.TipoEnteroContext):
+    # Enter a parse tree produced by KipuParser#inicializacion.
+    def enterInicializacion(self, ctx:KipuParser.InicializacionContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#tipoEntero.
-    def exitTipoEntero(self, ctx:KipuParser.TipoEnteroContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#tipoDecimal.
-    def enterTipoDecimal(self, ctx:KipuParser.TipoDecimalContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#tipoDecimal.
-    def exitTipoDecimal(self, ctx:KipuParser.TipoDecimalContext):
+    # Exit a parse tree produced by KipuParser#inicializacion.
+    def exitInicializacion(self, ctx:KipuParser.InicializacionContext):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#tipoPorcentaje.
-    def enterTipoPorcentaje(self, ctx:KipuParser.TipoPorcentajeContext):
+    # Enter a parse tree produced by KipuParser#tipo.
+    def enterTipo(self, ctx:KipuParser.TipoContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#tipoPorcentaje.
-    def exitTipoPorcentaje(self, ctx:KipuParser.TipoPorcentajeContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#tipoBooleano.
-    def enterTipoBooleano(self, ctx:KipuParser.TipoBooleanoContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#tipoBooleano.
-    def exitTipoBooleano(self, ctx:KipuParser.TipoBooleanoContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#tipoTexto.
-    def enterTipoTexto(self, ctx:KipuParser.TipoTextoContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#tipoTexto.
-    def exitTipoTexto(self, ctx:KipuParser.TipoTextoContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#tipoMonto.
-    def enterTipoMonto(self, ctx:KipuParser.TipoMontoContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#tipoMonto.
-    def exitTipoMonto(self, ctx:KipuParser.TipoMontoContext):
+    # Exit a parse tree produced by KipuParser#tipo.
+    def exitTipo(self, ctx:KipuParser.TipoContext):
         pass
 
 
@@ -116,174 +80,102 @@ class KipuListener(ParseTreeListener):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#exprY.
-    def enterExprY(self, ctx:KipuParser.ExprYContext):
+    # Enter a parse tree produced by KipuParser#opAsignacion.
+    def enterOpAsignacion(self, ctx:KipuParser.OpAsignacionContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#exprY.
-    def exitExprY(self, ctx:KipuParser.ExprYContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#exprAditiva.
-    def enterExprAditiva(self, ctx:KipuParser.ExprAditivaContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#exprAditiva.
-    def exitExprAditiva(self, ctx:KipuParser.ExprAditivaContext):
+    # Exit a parse tree produced by KipuParser#opAsignacion.
+    def exitOpAsignacion(self, ctx:KipuParser.OpAsignacionContext):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#exprRelacional.
-    def enterExprRelacional(self, ctx:KipuParser.ExprRelacionalContext):
+    # Enter a parse tree produced by KipuParser#expresion.
+    def enterExpresion(self, ctx:KipuParser.ExpresionContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#exprRelacional.
-    def exitExprRelacional(self, ctx:KipuParser.ExprRelacionalContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#exprParentesis.
-    def enterExprParentesis(self, ctx:KipuParser.ExprParentesisContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#exprParentesis.
-    def exitExprParentesis(self, ctx:KipuParser.ExprParentesisContext):
+    # Exit a parse tree produced by KipuParser#expresion.
+    def exitExpresion(self, ctx:KipuParser.ExpresionContext):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#exprLiteral.
-    def enterExprLiteral(self, ctx:KipuParser.ExprLiteralContext):
+    # Enter a parse tree produced by KipuParser#conjuncion.
+    def enterConjuncion(self, ctx:KipuParser.ConjuncionContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#exprLiteral.
-    def exitExprLiteral(self, ctx:KipuParser.ExprLiteralContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#exprLlamada.
-    def enterExprLlamada(self, ctx:KipuParser.ExprLlamadaContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#exprLlamada.
-    def exitExprLlamada(self, ctx:KipuParser.ExprLlamadaContext):
+    # Exit a parse tree produced by KipuParser#conjuncion.
+    def exitConjuncion(self, ctx:KipuParser.ConjuncionContext):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#exprNegativo.
-    def enterExprNegativo(self, ctx:KipuParser.ExprNegativoContext):
+    # Enter a parse tree produced by KipuParser#negacion.
+    def enterNegacion(self, ctx:KipuParser.NegacionContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#exprNegativo.
-    def exitExprNegativo(self, ctx:KipuParser.ExprNegativoContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#exprVariable.
-    def enterExprVariable(self, ctx:KipuParser.ExprVariableContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#exprVariable.
-    def exitExprVariable(self, ctx:KipuParser.ExprVariableContext):
+    # Exit a parse tree produced by KipuParser#negacion.
+    def exitNegacion(self, ctx:KipuParser.NegacionContext):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#exprIgualdad.
-    def enterExprIgualdad(self, ctx:KipuParser.ExprIgualdadContext):
+    # Enter a parse tree produced by KipuParser#igualdad.
+    def enterIgualdad(self, ctx:KipuParser.IgualdadContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#exprIgualdad.
-    def exitExprIgualdad(self, ctx:KipuParser.ExprIgualdadContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#exprConversion.
-    def enterExprConversion(self, ctx:KipuParser.ExprConversionContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#exprConversion.
-    def exitExprConversion(self, ctx:KipuParser.ExprConversionContext):
+    # Exit a parse tree produced by KipuParser#igualdad.
+    def exitIgualdad(self, ctx:KipuParser.IgualdadContext):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#exprO.
-    def enterExprO(self, ctx:KipuParser.ExprOContext):
+    # Enter a parse tree produced by KipuParser#relacional.
+    def enterRelacional(self, ctx:KipuParser.RelacionalContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#exprO.
-    def exitExprO(self, ctx:KipuParser.ExprOContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#exprMultiplicativa.
-    def enterExprMultiplicativa(self, ctx:KipuParser.ExprMultiplicativaContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#exprMultiplicativa.
-    def exitExprMultiplicativa(self, ctx:KipuParser.ExprMultiplicativaContext):
+    # Exit a parse tree produced by KipuParser#relacional.
+    def exitRelacional(self, ctx:KipuParser.RelacionalContext):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#exprNo.
-    def enterExprNo(self, ctx:KipuParser.ExprNoContext):
+    # Enter a parse tree produced by KipuParser#aritmetica.
+    def enterAritmetica(self, ctx:KipuParser.AritmeticaContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#exprNo.
-    def exitExprNo(self, ctx:KipuParser.ExprNoContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#litMonto.
-    def enterLitMonto(self, ctx:KipuParser.LitMontoContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#litMonto.
-    def exitLitMonto(self, ctx:KipuParser.LitMontoContext):
+    # Exit a parse tree produced by KipuParser#aritmetica.
+    def exitAritmetica(self, ctx:KipuParser.AritmeticaContext):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#litEntero.
-    def enterLitEntero(self, ctx:KipuParser.LitEnteroContext):
+    # Enter a parse tree produced by KipuParser#termino.
+    def enterTermino(self, ctx:KipuParser.TerminoContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#litEntero.
-    def exitLitEntero(self, ctx:KipuParser.LitEnteroContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#litDecimal.
-    def enterLitDecimal(self, ctx:KipuParser.LitDecimalContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#litDecimal.
-    def exitLitDecimal(self, ctx:KipuParser.LitDecimalContext):
+    # Exit a parse tree produced by KipuParser#termino.
+    def exitTermino(self, ctx:KipuParser.TerminoContext):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#litPorcentaje.
-    def enterLitPorcentaje(self, ctx:KipuParser.LitPorcentajeContext):
+    # Enter a parse tree produced by KipuParser#unario.
+    def enterUnario(self, ctx:KipuParser.UnarioContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#litPorcentaje.
-    def exitLitPorcentaje(self, ctx:KipuParser.LitPorcentajeContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#litTexto.
-    def enterLitTexto(self, ctx:KipuParser.LitTextoContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#litTexto.
-    def exitLitTexto(self, ctx:KipuParser.LitTextoContext):
+    # Exit a parse tree produced by KipuParser#unario.
+    def exitUnario(self, ctx:KipuParser.UnarioContext):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#litBooleano.
-    def enterLitBooleano(self, ctx:KipuParser.LitBooleanoContext):
+    # Enter a parse tree produced by KipuParser#primario.
+    def enterPrimario(self, ctx:KipuParser.PrimarioContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#litBooleano.
-    def exitLitBooleano(self, ctx:KipuParser.LitBooleanoContext):
+    # Exit a parse tree produced by KipuParser#primario.
+    def exitPrimario(self, ctx:KipuParser.PrimarioContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#literal.
+    def enterLiteral(self, ctx:KipuParser.LiteralContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#literal.
+    def exitLiteral(self, ctx:KipuParser.LiteralContext):
         pass
 
 
@@ -293,69 +185,6 @@ class KipuListener(ParseTreeListener):
 
     # Exit a parse tree produced by KipuParser#numero.
     def exitNumero(self, ctx:KipuParser.NumeroContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#seleccion.
-    def enterSeleccion(self, ctx:KipuParser.SeleccionContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#seleccion.
-    def exitSeleccion(self, ctx:KipuParser.SeleccionContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#iterMientras.
-    def enterIterMientras(self, ctx:KipuParser.IterMientrasContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#iterMientras.
-    def exitIterMientras(self, ctx:KipuParser.IterMientrasContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#iterPara.
-    def enterIterPara(self, ctx:KipuParser.IterParaContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#iterPara.
-    def exitIterPara(self, ctx:KipuParser.IterParaContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#regla.
-    def enterRegla(self, ctx:KipuParser.ReglaContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#regla.
-    def exitRegla(self, ctx:KipuParser.ReglaContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#parametros.
-    def enterParametros(self, ctx:KipuParser.ParametrosContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#parametros.
-    def exitParametros(self, ctx:KipuParser.ParametrosContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#parametro.
-    def enterParametro(self, ctx:KipuParser.ParametroContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#parametro.
-    def exitParametro(self, ctx:KipuParser.ParametroContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#retorno.
-    def enterRetorno(self, ctx:KipuParser.RetornoContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#retorno.
-    def exitRetorno(self, ctx:KipuParser.RetornoContext):
         pass
 
 
@@ -377,6 +206,123 @@ class KipuListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by KipuParser#argumentosCola.
+    def enterArgumentosCola(self, ctx:KipuParser.ArgumentosColaContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#argumentosCola.
+    def exitArgumentosCola(self, ctx:KipuParser.ArgumentosColaContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#seleccion.
+    def enterSeleccion(self, ctx:KipuParser.SeleccionContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#seleccion.
+    def exitSeleccion(self, ctx:KipuParser.SeleccionContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#parteSino.
+    def enterParteSino(self, ctx:KipuParser.ParteSinoContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#parteSino.
+    def exitParteSino(self, ctx:KipuParser.ParteSinoContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#colaSino.
+    def enterColaSino(self, ctx:KipuParser.ColaSinoContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#colaSino.
+    def exitColaSino(self, ctx:KipuParser.ColaSinoContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#iteracion.
+    def enterIteracion(self, ctx:KipuParser.IteracionContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#iteracion.
+    def exitIteracion(self, ctx:KipuParser.IteracionContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#pasoOpcional.
+    def enterPasoOpcional(self, ctx:KipuParser.PasoOpcionalContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#pasoOpcional.
+    def exitPasoOpcional(self, ctx:KipuParser.PasoOpcionalContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#regla.
+    def enterRegla(self, ctx:KipuParser.ReglaContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#regla.
+    def exitRegla(self, ctx:KipuParser.ReglaContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#parametros.
+    def enterParametros(self, ctx:KipuParser.ParametrosContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#parametros.
+    def exitParametros(self, ctx:KipuParser.ParametrosContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#parametrosCola.
+    def enterParametrosCola(self, ctx:KipuParser.ParametrosColaContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#parametrosCola.
+    def exitParametrosCola(self, ctx:KipuParser.ParametrosColaContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#parametro.
+    def enterParametro(self, ctx:KipuParser.ParametroContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#parametro.
+    def exitParametro(self, ctx:KipuParser.ParametroContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#tipoRetorno.
+    def enterTipoRetorno(self, ctx:KipuParser.TipoRetornoContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#tipoRetorno.
+    def exitTipoRetorno(self, ctx:KipuParser.TipoRetornoContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#retorno.
+    def enterRetorno(self, ctx:KipuParser.RetornoContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#retorno.
+    def exitRetorno(self, ctx:KipuParser.RetornoContext):
+        pass
+
+
+    # Enter a parse tree produced by KipuParser#valorRetorno.
+    def enterValorRetorno(self, ctx:KipuParser.ValorRetornoContext):
+        pass
+
+    # Exit a parse tree produced by KipuParser#valorRetorno.
+    def exitValorRetorno(self, ctx:KipuParser.ValorRetornoContext):
+        pass
+
+
     # Enter a parse tree produced by KipuParser#llamadaSentencia.
     def enterLlamadaSentencia(self, ctx:KipuParser.LlamadaSentenciaContext):
         pass
@@ -386,21 +332,12 @@ class KipuListener(ParseTreeListener):
         pass
 
 
-    # Enter a parse tree produced by KipuParser#salida.
-    def enterSalida(self, ctx:KipuParser.SalidaContext):
+    # Enter a parse tree produced by KipuParser#entradaSalida.
+    def enterEntradaSalida(self, ctx:KipuParser.EntradaSalidaContext):
         pass
 
-    # Exit a parse tree produced by KipuParser#salida.
-    def exitSalida(self, ctx:KipuParser.SalidaContext):
-        pass
-
-
-    # Enter a parse tree produced by KipuParser#entrada.
-    def enterEntrada(self, ctx:KipuParser.EntradaContext):
-        pass
-
-    # Exit a parse tree produced by KipuParser#entrada.
-    def exitEntrada(self, ctx:KipuParser.EntradaContext):
+    # Exit a parse tree produced by KipuParser#entradaSalida.
+    def exitEntradaSalida(self, ctx:KipuParser.EntradaSalidaContext):
         pass
 
 

@@ -1,0 +1,13 @@
+// Montos en céntimos y redondeo half-up (alejándose de cero)
+var m: monto<PEN> = 0.05 PEN;
+var n: monto<PEN> = -0.05 PEN;
+var cien: monto<PEN> = 100.00 PEN;
+var p: porcentaje = 18%;
+mostrar(m * 50%, n * 50%, cien * p, cien * 12.5%);
+mostrar(10.00 PEN / 3, 20.00 PEN / 3, cien * 1.155, cien / 8);
+mostrar(cien + 0.01 PEN, cien - 250.75 PEN, cien / 40.00 PEN);
+mostrar(p + 2.5%, p * 50%, p - 18%, p * 2);
+var acumulado: monto<PEN> = 0.00 PEN;
+acumulado += cien * p;
+acumulado -= 1.00 PEN;
+mostrar(acumulado);

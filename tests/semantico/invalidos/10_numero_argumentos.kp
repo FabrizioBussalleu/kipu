@@ -1,0 +1,7 @@
+// espera: SEM-09@5 SEM-09@6 SEM-09@7
+regla calcularIgv(base: monto<PEN>): monto<PEN> { retornar base * 18%; }
+regla cabecera() { mostrar("FACTURA"); }
+var subtotal: monto<PEN> = 100.00 PEN;
+var igv: monto<PEN> = calcularIgv();
+var igv2: monto<PEN> = calcularIgv(subtotal, 18%);
+cabecera(subtotal);

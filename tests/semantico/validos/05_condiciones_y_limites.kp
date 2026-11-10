@@ -1,0 +1,9 @@
+// espera: OK
+var activo: booleano = verdadero;
+var n: entero = 10;
+var total: monto<PEN> = 0.00 PEN;
+si (activo y n > 0) { total += 10.00 PEN; }
+mientras (no (total >= 100.00 PEN)) { total += 25.00 PEN; }
+para i desde n hasta 1 paso -1 { total -= 1.00 PEN; }
+var completo: porcentaje = 100%;
+var nulo: porcentaje = 0%;

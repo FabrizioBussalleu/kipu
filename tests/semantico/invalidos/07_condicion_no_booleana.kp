@@ -1,0 +1,9 @@
+// espera: SEM-06@5 SEM-06@7 SEM-06@9
+var cantidad: entero = 3;
+var total: monto<PEN> = 100.00 PEN;
+var estado: texto = "pendiente";
+si (cantidad) { mostrar("hay items"); }
+si (cantidad > 5) { mostrar("muchos"); }
+sino si (total) { mostrar("con monto"); }
+mientras (cantidad > 0) { cantidad -= 1; }
+mientras (estado) { estado = "listo"; }

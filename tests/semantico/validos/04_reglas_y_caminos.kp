@@ -1,0 +1,21 @@
+// espera: OK
+// Todos los caminos retornan; argumentos con ensanchamiento entero -> decimal
+regla tasaDetraccion(tipo: entero): porcentaje {
+    si (tipo == 1) {
+        retornar 12%;
+    } sino si (tipo == 2) {
+        retornar 10%;
+    } sino {
+        retornar 4%;
+    }
+}
+regla escalar(x: decimal, veces: entero): decimal {
+    { retornar x * veces; }
+}
+regla imprimirCuota(c: monto<PEN>) {
+    si (c > 0.00 PEN) { mostrar("Cuota:", c); retornar; }
+    mostrar("Sin cuota");
+}
+var t: porcentaje = tasaDetraccion(1);
+var e: decimal = escalar(3, 2);
+imprimirCuota(250.00 PEN * t);

@@ -1,0 +1,10 @@
+// Operadores lógicos con cortocircuito, comparaciones y textos
+var t: booleano = verdadero;
+var f: booleano = falso;
+var nombre: texto = "Kipu";
+mostrar(t y f, t o f, no t, no (f o f), t == f);
+mostrar(nombre, nombre == "Kipu", nombre != "Otro");
+var n: entero = 0;
+si (n != 0 y 10 / n > 1.0) { mostrar("no evalúa la división"); } sino { mostrar("cortocircuito y"); }
+si (n == 0 o 10 / n > 1.0) { mostrar("cortocircuito o"); }
+mostrar(3 < 3.5, 2.0 == 2);
