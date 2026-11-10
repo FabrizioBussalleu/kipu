@@ -1,0 +1,4 @@
+// espera: GEN-01@3
+// Las reglas se generan en el Hito 3: el back end lo informa con GEN-01
+regla igv(base: monto<PEN>): monto<PEN> { retornar base * 18%; }
+mostrar(igv(100.00 PEN));

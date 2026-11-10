@@ -1,19 +1,31 @@
-/*
- * Kipu: lenguaje de dominio específico para reglas tributarias y montos monetarios.
- * Teoría de Compiladores (1ACC0218), UPC, ciclo 2026-2. Hito 1.
- *
- * Gramática combinada ANTLR4 (analizador léxico + analizador sintáctico).
- * Generación del parser para Python:
- *   java -jar lib/antlr-4.13.2-complete.jar -Dlanguage=Python3 -visitor -o src/generated -Xexact-output-dir grammar/Kipu.g4
- */
+// Kipu: lenguaje de dominio específico para reglas tributarias y montos monetarios.
+// Teoría de Compiladores (1ACC0218), UPC, ciclo 2026-2. Hito 2 (gramática actualizada).
+//
+// Forma estándar del curso:
+// 1. Todo símbolo especial, operador y palabra reservada es un token con nombre del lexer;
+// el parser solo usa nombres de tokens.
+// 2. Sin el operador ? : las partes opcionales usan una alternativa vacía (épsilon).
+// 3. Sin los operadores * ni + ni subreglas agrupadas: las listas usan recursión y
+// alternativa vacía (también en el lexer, con fragments recursivos). La precedencia
+// de las expresiones se define por niveles.
+// El comentario de bloque se omite; solo existe el comentario de línea.
+//
+// Generación del parser (Python):
+// java -jar lib/antlr-4.13.2-complete.jar -Dlanguage=Python3 -visitor -o src/generated -Xexact-output-dir grammar/Kipu.g4
 grammar Kipu;
 
 // ============================================================================
 // ANALIZADOR SINTÁCTICO
 // ============================================================================
 
+// --- Estructura general -------------------------------------------------------
 programa
-    : sentencia* EOF
+    : listaSentencias EOF
+    ;
+
+listaSentencias
+    : sentencia listaSentencias
+    |
     ;
 
 sentencia
@@ -29,54 +41,104 @@ sentencia
     ;
 
 bloque
-    : LLAVE_IZQ sentencia* LLAVE_DER
+    : LLAVE_IZQ listaSentencias LLAVE_DER
     ;
 
-// --- 1. Declaración de variables y constantes -------------------------------
+// --- G1. Declaración de variables y constantes --------------------------------
 declaracion
-    : VAR ID DOS_PUNTOS tipo (ASIG expresion)? PUNTO_COMA      # declaracionVariable
-    | CONST ID DOS_PUNTOS tipo ASIG expresion PUNTO_COMA       # declaracionConstante
+    : VAR ID DOS_PUNTOS tipo inicializacion PUNTO_COMA
+    | CONST ID DOS_PUNTOS tipo ASIG expresion PUNTO_COMA
+    ;
+
+inicializacion
+    : ASIG expresion
+    |
     ;
 
 tipo
-    : ENTERO                              # tipoEntero
-    | DECIMAL                             # tipoDecimal
-    | PORCENTAJE                          # tipoPorcentaje
-    | BOOLEANO                            # tipoBooleano
-    | TEXTO                               # tipoTexto
-    | MONTO MENOR MONEDA MAYOR            # tipoMonto
+    : ENTERO
+    | DECIMAL
+    | PORCENTAJE
+    | BOOLEANO
+    | TEXTO
+    | MONTO MENOR MONEDA MAYOR
     ;
 
-// --- 2. Asignación ------------------------------------------------------------
+// --- G2. Asignación -------------------------------------------------------------
 asignacion
-    : ID op=(ASIG | MAS_ASIG | MENOS_ASIG) expresion PUNTO_COMA
+    : ID opAsignacion expresion PUNTO_COMA
     ;
 
-// --- 3. Expresiones (aritméticas, monetarias, relacionales y lógicas) --------
-// El orden de las alternativas define la precedencia (de mayor a menor).
+opAsignacion
+    : ASIG
+    | MAS_ASIG
+    | MENOS_ASIG
+    ;
+
+// --- G3. Expresiones (precedencia por niveles, de menor a mayor) ---------------
 expresion
-    : PAR_IZQ expresion PAR_DER                                               # exprParentesis
-    | CONVERTIR PAR_IZQ expresion COMA MONEDA COMA expresion PAR_DER           # exprConversion
-    | llamada                                                                 # exprLlamada
-    | RESTA expresion                                                         # exprNegativo
-    | expresion op=(MULT | DIV | MOD) expresion                               # exprMultiplicativa
-    | expresion op=(SUMA | RESTA) expresion                                   # exprAditiva
-    | expresion op=(MENOR | MENOR_IGUAL | MAYOR | MAYOR_IGUAL) expresion      # exprRelacional
-    | expresion op=(IGUAL | DIFERENTE) expresion                              # exprIgualdad
-    | NO expresion                                                            # exprNo
-    | expresion Y expresion                                                   # exprY
-    | expresion O expresion                                                   # exprO
-    | literal                                                                 # exprLiteral
-    | ID                                                                      # exprVariable
+    : expresion O conjuncion
+    | conjuncion
+    ;
+
+conjuncion
+    : conjuncion Y negacion
+    | negacion
+    ;
+
+negacion
+    : NO negacion
+    | igualdad
+    ;
+
+igualdad
+    : igualdad IGUAL relacional
+    | igualdad DIFERENTE relacional
+    | relacional
+    ;
+
+relacional
+    : relacional MENOR aritmetica
+    | relacional MENOR_IGUAL aritmetica
+    | relacional MAYOR aritmetica
+    | relacional MAYOR_IGUAL aritmetica
+    | aritmetica
+    ;
+
+aritmetica
+    : aritmetica SUMA termino
+    | aritmetica RESTA termino
+    | termino
+    ;
+
+termino
+    : termino MULT unario
+    | termino DIV unario
+    | termino MOD unario
+    | unario
+    ;
+
+unario
+    : RESTA unario
+    | primario
+    ;
+
+primario
+    : PAR_IZQ expresion PAR_DER
+    | CONVERTIR PAR_IZQ expresion COMA MONEDA COMA expresion PAR_DER
+    | llamada
+    | literal
+    | ID
     ;
 
 literal
-    : numero MONEDA          # litMonto
-    | NUM_ENTERO             # litEntero
-    | NUM_DECIMAL            # litDecimal
-    | LIT_PORCENTAJE         # litPorcentaje
-    | CADENA                 # litTexto
-    | (VERDADERO | FALSO)    # litBooleano
+    : numero MONEDA
+    | NUM_ENTERO
+    | NUM_DECIMAL
+    | LIT_PORCENTAJE
+    | CADENA
+    | VERDADERO
+    | FALSO
     ;
 
 numero
@@ -84,74 +146,106 @@ numero
     | NUM_DECIMAL
     ;
 
-// --- 4. Sentencias selectivas -------------------------------------------------
+llamada
+    : ID PAR_IZQ argumentos PAR_DER
+    ;
+
+argumentos
+    : expresion argumentosCola
+    |
+    ;
+
+argumentosCola
+    : COMA expresion argumentosCola
+    |
+    ;
+
+// --- G4. Sentencias selectivas ------------------------------------------------
 seleccion
-    : SI PAR_IZQ expresion PAR_DER bloque
-      (SINO SI PAR_IZQ expresion PAR_DER bloque)*
-      (SINO bloque)?
+    : SI PAR_IZQ expresion PAR_DER bloque parteSino
     ;
 
-// --- 5. Sentencias iterativas ---------------------------------------------
+parteSino
+    : SINO colaSino
+    |
+    ;
+
+colaSino
+    : seleccion
+    | bloque
+    ;
+
+// --- G5. Sentencias iterativas --------------------------------------------------
 iteracion
-    : MIENTRAS PAR_IZQ expresion PAR_DER bloque                                  # iterMientras
-    | PARA ID DESDE expresion HASTA expresion (PASO expresion)? bloque           # iterPara
+    : MIENTRAS PAR_IZQ expresion PAR_DER bloque
+    | PARA ID DESDE expresion HASTA expresion pasoOpcional bloque
     ;
 
-// --- 6. Reglas (funciones), llamadas y retorno ---------------------------------
+pasoOpcional
+    : PASO expresion
+    |
+    ;
+
+// --- G6. Reglas (funciones), retorno y llamadas -------------------------------
 regla
-    : REGLA ID PAR_IZQ parametros? PAR_DER (DOS_PUNTOS tipo)? bloque
+    : REGLA ID PAR_IZQ parametros PAR_DER tipoRetorno bloque
     ;
 
 parametros
-    : parametro (COMA parametro)*
+    : parametro parametrosCola
+    |
+    ;
+
+parametrosCola
+    : COMA parametro parametrosCola
+    |
     ;
 
 parametro
     : ID DOS_PUNTOS tipo
     ;
 
+tipoRetorno
+    : DOS_PUNTOS tipo
+    |
+    ;
+
 retorno
-    : RETORNAR expresion? PUNTO_COMA
+    : RETORNAR valorRetorno PUNTO_COMA
     ;
 
-llamada
-    : ID PAR_IZQ argumentos? PAR_DER
-    ;
-
-argumentos
-    : expresion (COMA expresion)*
+valorRetorno
+    : expresion
+    |
     ;
 
 llamadaSentencia
     : llamada PUNTO_COMA
     ;
 
-// --- 7. Entrada y salida -------------------------------------------------------
+// --- G7. Entrada y salida --------------------------------------------------------
 entradaSalida
-    : MOSTRAR PAR_IZQ argumentos PAR_DER PUNTO_COMA        # salida
-    | LEER PAR_IZQ ID PAR_DER PUNTO_COMA                   # entrada
+    : MOSTRAR PAR_IZQ expresion argumentosCola PAR_DER PUNTO_COMA
+    | LEER PAR_IZQ ID PAR_DER PUNTO_COMA
     ;
 
 // ============================================================================
 // ANALIZADOR LÉXICO
 // ============================================================================
 
-// --- Palabras clave: declaración ----------------------------------------------
+// --- Palabras reservadas (antes que ID para tener prioridad) --------------------
 VAR         : 'var' ;
 CONST       : 'const' ;
-
-// --- Palabras clave: tipos de datos -------------------------------------------
 ENTERO      : 'entero' ;
 DECIMAL     : 'decimal' ;
 PORCENTAJE  : 'porcentaje' ;
 BOOLEANO    : 'booleano' ;
 TEXTO       : 'texto' ;
 MONTO       : 'monto' ;
-
-// --- Monedas (ISO 4217) -------------------------------------------------------
-MONEDA      : 'PEN' | 'USD' | 'EUR' ;
-
-// --- Palabras clave: control de flujo ------------------------------------------
+MONEDA      : 'PEN'
+            | 'USD'
+            | 'EUR'
+            ;
 SI          : 'si' ;
 SINO        : 'sino' ;
 MIENTRAS    : 'mientras' ;
@@ -159,15 +253,11 @@ PARA        : 'para' ;
 DESDE       : 'desde' ;
 HASTA       : 'hasta' ;
 PASO        : 'paso' ;
-
-// --- Palabras clave: reglas, E/S y conversión ---------------------------------
 REGLA       : 'regla' ;
 RETORNAR    : 'retornar' ;
 MOSTRAR     : 'mostrar' ;
 LEER        : 'leer' ;
 CONVERTIR   : 'convertir' ;
-
-// --- Operadores lógicos y literales booleanos ----------------------------------
 Y           : 'y' ;
 O           : 'o' ;
 NO          : 'no' ;
@@ -175,7 +265,7 @@ VERDADERO   : 'verdadero' ;
 FALSO       : 'falso' ;
 MOD         : 'mod' ;
 
-// --- Operadores -------------------------------------------------------------
+// --- Operadores --------------------------------------------------------------
 MAS_ASIG    : '+=' ;
 MENOS_ASIG  : '-=' ;
 IGUAL       : '==' ;
@@ -190,7 +280,7 @@ RESTA       : '-' ;
 MULT        : '*' ;
 DIV         : '/' ;
 
-// --- Delimitadores ------------------------------------------------------------
+// --- Símbolos especiales (delimitadores) ----------------------------------------
 PAR_IZQ     : '(' ;
 PAR_DER     : ')' ;
 LLAVE_IZQ   : '{' ;
@@ -200,18 +290,50 @@ COMA        : ',' ;
 DOS_PUNTOS  : ':' ;
 
 // --- Literales ----------------------------------------------------------------
-LIT_PORCENTAJE : DIGITO+ ('.' DIGITO+)? '%' ;
-NUM_DECIMAL    : DIGITO+ '.' DIGITO+ ;
-NUM_ENTERO     : DIGITO+ ;
-CADENA         : '"' ( ~["\\\r\n] | '\\' . )* '"' ;
+LIT_PORCENTAJE
+            : DIGITOS '%'
+            | DIGITOS '.' DIGITOS '%'
+            ;
+NUM_DECIMAL : DIGITOS '.' DIGITOS ;
+NUM_ENTERO  : DIGITOS ;
+CADENA      : '"' CADENA_COLA '"' ;
 
-// --- Identificadores (después de las palabras clave) ------------------------
-ID          : LETRA (LETRA | DIGITO)* ;
+// --- Identificadores ------------------------------------------------------------
+ID          : LETRA ID_COLA ;
 
 // --- Elementos ignorados -------------------------------------------------------
-COMENTARIO_LINEA  : '//' ~[\r\n]* -> skip ;
-COMENTARIO_BLOQUE : '/*' .*? '*/' -> skip ;
-ESPACIO           : [ \t\r\n]+ -> skip ;
+COMENTARIO  : '//' COMENTARIO_COLA -> skip ;
+ESPACIO     : BLANCO ESPACIO_COLA -> skip ;
 
+// --- Fragments recursivos -----------------------------------------------------
+fragment DIGITOS
+            : DIGITO DIGITOS_COLA
+            ;
+fragment DIGITOS_COLA
+            : DIGITO DIGITOS_COLA
+            |
+            ;
+fragment ID_COLA
+            : LETRA ID_COLA
+            | DIGITO ID_COLA
+            |
+            ;
+fragment CADENA_COLA
+            : CARACTER_CADENA CADENA_COLA
+            |
+            ;
+fragment CARACTER_CADENA
+            : ~["\\\r\n]
+            | '\\' ~[\r\n]
+            ;
+fragment COMENTARIO_COLA
+            : ~[\r\n] COMENTARIO_COLA
+            |
+            ;
+fragment ESPACIO_COLA
+            : BLANCO ESPACIO_COLA
+            |
+            ;
+fragment BLANCO : [ \t\r\n] ;
 fragment DIGITO : [0-9] ;
 fragment LETRA  : [a-zA-Z_áéíóúÁÉÍÓÚñÑ] ;

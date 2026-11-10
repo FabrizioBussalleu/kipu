@@ -1,151 +1,144 @@
 """Genera y verifica las derivaciones más a la izquierda de los ejemplos de cada construcción.
 
-1. Tokeniza cada ejemplo con el analizador léxico generado por ANTLR (src/generated).
-2. Reconoce la secuencia de tokens con la gramática BNF del informe (scripts/gramatica_bnf.py)
-   usando un parser Earley (lark), y verifica que no haya ambigüedad.
-3. Recorre el árbol en preorden para producir la derivación más a la izquierda (⇒lm).
-4. Verifica además que todos los programas válidos de tests/sintactico/validos sean
-   aceptados por la gramática BNF (consistencia entre el informe y Kipu.g4).
+Como Kipu.g4 está en forma estándar (BNF pura), el árbol de análisis de ANTLR corresponde
+exactamente a la gramática del informe. Para cada ejemplo:
+  1. Se analiza con la regla inicial de su construcción (parser ANTLR de Kipu).
+  2. Se exige que no haya errores y que se consuma toda la entrada.
+  3. Se activa la detección exacta de ambigüedad de ANTLR (LL_EXACT_AMBIG_DETECTION):
+     cualquier ambigüedad reportada hace fallar la verificación.
+  4. El árbol se recorre en preorden: reemplazar siempre el no terminal de más a la
+     izquierda por los hijos de su nodo es, por definición, la derivación más a la izquierda.
+  5. Se comprueba que cada paso aplique una producción existente en Kipu.g4.
 
 Salida: docs/derivaciones.json y docs/anexo_derivaciones.md
-
-Requiere: pip install lark
 Uso: python scripts/derivaciones.py
 """
 import json
 import os
 import sys
 
-from lark import Lark, Tree
-
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RAIZ, "src"))
 sys.path.insert(0, os.path.join(RAIZ, "tests"))
 sys.path.insert(0, os.path.join(RAIZ, "scripts"))
 
-from antlr4 import InputStream  # noqa: E402
+from antlr4 import CommonTokenStream, InputStream, Token  # noqa: E402
+from antlr4.atn.PredictionMode import PredictionMode  # noqa: E402
+from antlr4.error.ErrorListener import ErrorListener  # noqa: E402
+from antlr4.tree.Tree import TerminalNode  # noqa: E402
 
 from construcciones import CONSTRUCCIONES  # noqa: E402
 from generated.KipuLexer import KipuLexer  # noqa: E402
-from gramatica_bnf import CLASE_TOKEN, GRAMATICAS, PRODUCCIONES, TERMINALES  # noqa: E402
-
-CODIGO = {t: f"t{i:03d}" for i, t in enumerate(TERMINALES)}
-TERMINAL_DE_CODIGO = {v: k for k, v in CODIGO.items()}
+from generated.KipuParser import KipuParser  # noqa: E402
+from gramatica_bnf import GRUPOS, producciones  # noqa: E402
 
 
-def gramatica_lark() -> str:
-    lineas = []
-    for nt, alts in PRODUCCIONES.items():
-        cuerpo = " | ".join(" ".join(CODIGO[s].upper() if s in CODIGO else s for s in alt) for alt in alts)
-        lineas.append(f"{nt}: {cuerpo}")
-    for t, c in CODIGO.items():
-        lineas.append(f'{c.upper()}: "{c}"')
-    lineas.append('%ignore " "')
-    return "\n".join(lineas)
+class Vigilante(ErrorListener):
+    def __init__(self):
+        self.errores, self.ambiguedades = [], []
+
+    def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
+        self.errores.append(f"{line}:{column} {msg}")
+
+    def reportAmbiguity(self, recognizer, dfa, startIndex, stopIndex, exact, ambigAlts, configs):
+        if exact:
+            self.ambiguedades.append((startIndex, stopIndex, str(ambigAlts)))
 
 
-def tokenizar(codigo: str) -> list[tuple[str, str]]:
-    """Devuelve pares (terminal de la gramática, lexema)."""
+def analizar(codigo: str, regla: str):
     lexer = KipuLexer(InputStream(codigo))
-    salida = []
-    for t in lexer.getAllTokens():
-        nombre = KipuLexer.symbolicNames[t.type]
-        salida.append((CLASE_TOKEN.get(nombre, t.text), t.text))
-    return salida
+    lexer.removeErrorListeners()
+    tokens = CommonTokenStream(lexer)
+    parser = KipuParser(tokens)
+    parser.removeErrorListeners()
+    vig = Vigilante()
+    parser.addErrorListener(vig)
+    parser._interp.predictionMode = PredictionMode.LL_EXACT_AMBIG_DETECTION
+    arbol = getattr(parser, regla)()
+    completo = parser.getCurrentToken().type == Token.EOF
+    return arbol, parser, vig, completo
 
 
-def tiene_ambiguedad(arbol) -> bool:
-    return any(isinstance(n, Tree) and n.data == "_ambig" for n in arbol.iter_subtrees())
+def simbolo(nodo, parser) -> str:
+    if isinstance(nodo, TerminalNode):
+        return KipuLexer.symbolicNames[nodo.getSymbol().type]
+    return parser.ruleNames[nodo.getRuleIndex()]
 
 
-def derivacion_izquierda(arbol: Tree) -> list[list[str]]:
-    """Cada paso es la forma sentencial como lista de símbolos."""
+def derivacion_izquierda(arbol, parser):
+    """Lista de pasos; cada paso = (forma sentencial, producción aplicada)."""
     forma = [arbol]
-    pasos = [[arbol.data]]
+    pasos = [([simbolo(arbol, parser)], None)]
     while True:
-        idx = next((i for i, x in enumerate(forma) if isinstance(x, Tree)), None)
+        idx = next((i for i, x in enumerate(forma) if not isinstance(x, TerminalNode)), None)
         if idx is None:
             break
         nodo = forma[idx]
-        forma = forma[:idx] + list(nodo.children) + forma[idx + 1:]
-        pasos.append([x.data if isinstance(x, Tree) else TERMINAL_DE_CODIGO[str(x)] for x in forma])
+        hijos = list(nodo.getChildren()) if nodo.getChildCount() else []
+        produccion = (simbolo(nodo, parser), [simbolo(h, parser) for h in hijos])
+        forma = forma[:idx] + hijos + forma[idx + 1:]
+        pasos.append(([simbolo(x, parser) for x in forma], produccion))
     return pasos
 
 
 def main() -> int:
-    gramatica = gramatica_lark()
-    parsers = {}
-
-    def parser(inicio):
-        if inicio not in parsers:
-            parsers[inicio] = Lark(gramatica, start=inicio, parser="earley",
-                                   keep_all_tokens=True, ambiguity="explicit")
-        return parsers[inicio]
-
-    resultado = []
-    fallos = 0
+    prods = producciones()
+    resultado, fallos = [], 0
     for c in CONSTRUCCIONES:
         entrada = {"id": c["id"], "nombre": c["nombre"], "simbolo": c["simbolo"], "derivaciones": []}
+        aceptados = 0
         for i, ejemplo in enumerate(c["ejemplos"]):
-            tokens = tokenizar(ejemplo)
-            cadena = " ".join(CODIGO[t] for t, _ in tokens)
-            try:
-                arbol = parser(c["simbolo"]).parse(cadena)
-            except Exception as exc:  # noqa: BLE001
-                print(f"[FALLA] {c['id']} ejemplo {i + 1}: {ejemplo}\n        {exc}")
+            arbol, parser, vig, completo = analizar(ejemplo, c["regla_antlr"])
+            if vig.errores or not completo or vig.ambiguedades:
+                print(f"[FALLA] {c['id']}.{i + 1} {ejemplo}: errores={vig.errores} completo={completo} "
+                      f"ambiguedades={vig.ambiguedades}")
                 fallos += 1
                 continue
-            if tiene_ambiguedad(arbol):
-                print(f"[AMBIGUA] {c['id']} ejemplo {i + 1}: {ejemplo}")
-                fallos += 1
+            aceptados += 1
+            if i not in c["derivar"]:
                 continue
-            if i in c["derivar"]:
-                pasos = derivacion_izquierda(arbol)
-                entrada["derivaciones"].append({
-                    "ejemplo": ejemplo,
-                    "tokens": [t for t, _ in tokens],
-                    "lexemas": [lx for _, lx in tokens],
-                    "pasos": pasos,
-                })
+            pasos = derivacion_izquierda(arbol, parser)
+            for forma, prod in pasos[1:]:
+                nt, cuerpo = prod
+                if cuerpo not in prods[nt]:
+                    print(f"[FALLA] {c['id']}.{i + 1}: producción inexistente {nt} -> {cuerpo}")
+                    fallos += 1
+            lexemas = [t.text for t in KipuLexer(InputStream(ejemplo)).getAllTokens()]
+            entrada["derivaciones"].append({
+                "ejemplo": ejemplo,
+                "tokens": pasos[-1][0],
+                "lexemas": lexemas,
+                "pasos": [forma for forma, _ in pasos],
+                "producciones": [None] + [f"{nt} → {' '.join(cu) if cu else 'ε'}" for _, (nt, cu) in pasos[1:]],
+            })
         resultado.append(entrada)
-        print(f"{c['id']}: 5/5 ejemplos reconocidos por la BNF, {len(entrada['derivaciones'])} derivaciones generadas")
-
-    # Consistencia con programas completos
-    carpeta = os.path.join(RAIZ, "tests", "sintactico", "validos")
-    for archivo in sorted(os.listdir(carpeta)):
-        with open(os.path.join(carpeta, archivo), encoding="utf-8") as f:
-            codigo = f.read()
-        cadena = " ".join(CODIGO[t] for t, _ in tokenizar(codigo))
-        try:
-            arbol = parser("programa").parse(cadena)
-            estado = "AMBIGUO" if tiene_ambiguedad(arbol) else "OK"
-        except Exception:  # noqa: BLE001
-            estado = "FALLA"
-        if estado != "OK":
-            fallos += 1
-        print(f"BNF acepta {archivo}: {estado}")
+        print(f"{c['id']}: {aceptados}/5 ejemplos aceptados sin ambigüedad, "
+              f"{len(entrada['derivaciones'])} derivaciones generadas")
 
     docs = os.path.join(RAIZ, "docs")
     os.makedirs(docs, exist_ok=True)
     with open(os.path.join(docs, "derivaciones.json"), "w", encoding="utf-8") as f:
         json.dump(resultado, f, ensure_ascii=False, indent=1)
 
-    md = ["# Anexo: derivaciones más a la izquierda", "",
-          "Generado y verificado automáticamente con `python scripts/derivaciones.py`.",
-          "Cada ejemplo se tokeniza con el lexer ANTLR de Kipu y se deriva con la gramática BNF del informe.", ""]
+    titulos = {gid: t for gid, t, _ in GRUPOS}
+    md = ["# Anexo A: derivaciones más a la izquierda (Hito 2)", "",
+          "Generado y verificado con `python scripts/derivaciones.py` a partir de la gramática actualizada",
+          "(grammar/Kipu.g4). En cada paso se reemplaza el no terminal de más a la izquierda por el cuerpo de",
+          "una de sus producciones; los terminales son los nombres de token del lexer.", ""]
     for g in resultado:
-        titulo = next(t for gid, t, _ in GRAMATICAS if gid == g["id"])
-        md += [f"## {g['id']}. {titulo}", ""]
+        md += [f"## {g['id']}. {titulos[g['id']]}", ""]
         for n, d in enumerate(g["derivaciones"], 1):
             md += [f"### Ejemplo {g['id']}.{n}", "", "```kipu", d["ejemplo"], "```", "",
-                   "Tokens: `" + " ".join(d["tokens"]) + "`", "", "```"]
+                   "Cadena de tokens: `" + " ".join(d["tokens"]) + "`", "", "```"]
             for k, paso in enumerate(d["pasos"]):
-                md.append(("    " if k == 0 else "⇒lm ") + " ".join(paso))
+                linea = ("     " if k == 0 else "⇒lm  ") + " ".join(paso)
+                md.append(linea)
             md += ["```", ""]
     with open(os.path.join(docs, "anexo_derivaciones.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(md))
 
-    print("Sin fallos." if not fallos else f"{fallos} fallo(s).")
+    total = sum(len(g["derivaciones"]) for g in resultado)
+    print(f"{total} derivaciones escritas en docs/. " + ("Sin fallos." if not fallos else f"{fallos} fallo(s)."))
     return 1 if fallos else 0
 
 

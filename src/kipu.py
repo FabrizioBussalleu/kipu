@@ -1,10 +1,15 @@
-"""Driver del compilador Kipu (Hito 1).
+"""Driver del compilador Kipu (Hito 2).
 
 Uso:
-    python src/kipu.py <archivo.kp> [--tokens] [--arbol] [--simbolos] [--solo-lexico] [--solo-sintactico]
+    python src/kipu.py <archivo.kp> [opciones]
 
-Fases ejecutadas: análisis léxico, sintáctico y semántico (parcial).
-Código de salida: 0 si no hay errores, 1 si hay errores, 2 si el archivo no existe.
+Opciones de inspección:  --tokens  --arbol  --simbolos
+Opciones de fase:        --solo-lexico  --solo-sintactico
+Back end (LLVM):         --llvm [salida.ll]   genera LLVM IR (por defecto junto al fuente)
+                         --ejecutar          genera el IR y lo ejecuta con el JIT de LLVM
+
+Fases: léxico (ANTLR) -> sintáctico (ANTLR) -> construcción del AST -> semántico -> LLVM IR.
+Código de salida: 0 sin errores, 1 con errores, 2 si el archivo no existe.
 """
 import argparse
 import os
@@ -15,12 +20,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from antlr4 import CommonTokenStream, FileStream, InputStream, Token  # noqa: E402
 from antlr4.tree.Tree import TerminalNode  # noqa: E402
 
+from constructor_ast import ConstructorAST  # noqa: E402
 from errores import ErrorCompilacion, RecolectorErrores  # noqa: E402
 from generated.KipuLexer import KipuLexer  # noqa: E402
 from generated.KipuParser import KipuParser  # noqa: E402
 from semantico import AnalizadorSemantico  # noqa: E402
 
-VERSION = "0.1.0 (Hito 1)"
+VERSION = "0.2.0 (Hito 2)"
+FASES = [("LEX", "Análisis léxico"), ("SIN", "Análisis sintáctico"), ("SEM", "Análisis semántico"),
+         ("GEN", "Generación LLVM IR")]
 
 
 class ResultadoCompilacion:
@@ -28,7 +36,9 @@ class ResultadoCompilacion:
         self.tokens = []
         self.arbol = None
         self.parser = None
+        self.ast = None
         self.semantico = None
+        self.ir = None
         self.errores: list[ErrorCompilacion] = []
 
     @property
@@ -40,7 +50,7 @@ class ResultadoCompilacion:
 
 
 def compilar(codigo: str | None = None, ruta: str | None = None, hasta: str = "semantico") -> ResultadoCompilacion:
-    """Ejecuta las fases del front end. `hasta` puede ser 'lexico', 'sintactico' o 'semantico'."""
+    """Ejecuta las fases del compilador. `hasta`: 'lexico', 'sintactico', 'semantico' o 'llvm'."""
     res = ResultadoCompilacion()
     entrada = FileStream(ruta, encoding="utf-8") if ruta else InputStream(codigo)
 
@@ -67,11 +77,22 @@ def compilar(codigo: str | None = None, ruta: str | None = None, hasta: str = "s
     if hasta == "sintactico" or res.errores:
         return res
 
-    # Fase 3: análisis semántico (solo si no hubo errores previos)
+    # Fase 3: AST y análisis semántico
+    res.ast = ConstructorAST().visit(res.arbol)
     sem = AnalizadorSemantico()
-    sem.visit(res.arbol)
+    sem.analizar(res.ast)
     res.semantico = sem
     res.errores.extend(sem.errores)
+    if hasta == "semantico" or res.errores:
+        return res
+
+    # Fase 4: generación de LLVM IR
+    from generador_llvm import ErrorGeneracion, GeneradorLLVM
+    nombre = os.path.splitext(os.path.basename(ruta))[0] if ruta else "kipu"
+    try:
+        res.ir = str(GeneradorLLVM(nombre).generar(res.ast))
+    except ErrorGeneracion as exc:
+        res.errores.append(exc.error)
     return res
 
 
@@ -90,19 +111,15 @@ def imprimir_arbol(nodo, parser, prefijo: str = "", ultimo: bool = True, raiz: b
     conector = "" if raiz else ("└── " if ultimo else "├── ")
     if isinstance(nodo, TerminalNode):
         tok = nodo.getSymbol()
-        if tok.type == Token.EOF:
-            etiqueta = "EOF"
-        else:
-            etiqueta = f"{KipuLexer.symbolicNames[tok.type]} '{tok.text}'"
+        etiqueta = "EOF" if tok.type == Token.EOF else f"{KipuLexer.symbolicNames[tok.type]} '{tok.text}'"
     else:
         etiqueta = parser.ruleNames[nodo.getRuleIndex()]
-        alt = type(nodo).__name__.replace("Context", "")
-        if alt[0].lower() + alt[1:] != etiqueta:
-            etiqueta += f" <{alt[0].lower() + alt[1:]}>"
+        if nodo.getChildCount() == 0:
+            etiqueta += "  (ε)"
     print(prefijo + conector + etiqueta)
     if isinstance(nodo, TerminalNode):
         return
-    hijos = list(nodo.getChildren())
+    hijos = list(nodo.getChildren()) if nodo.getChildCount() else []
     nuevo_prefijo = prefijo + ("" if raiz else ("    " if ultimo else "│   "))
     for i, hijo in enumerate(hijos):
         imprimir_arbol(hijo, parser, nuevo_prefijo, i == len(hijos) - 1, False)
@@ -126,27 +143,35 @@ def main(argv=None) -> int:
         except AttributeError:
             pass
 
-    ap = argparse.ArgumentParser(prog="kipu", description="Compilador del lenguaje Kipu (front end, Hito 1)")
+    ap = argparse.ArgumentParser(prog="kipu", description="Compilador del lenguaje Kipu (Hito 2)")
     ap.add_argument("archivo", help="programa fuente .kp")
     ap.add_argument("--tokens", action="store_true", help="muestra la tabla de tokens")
     ap.add_argument("--arbol", action="store_true", help="muestra el árbol sintáctico")
     ap.add_argument("--simbolos", action="store_true", help="muestra la tabla de símbolos")
     ap.add_argument("--solo-lexico", action="store_true", help="ejecuta solo el análisis léxico")
     ap.add_argument("--solo-sintactico", action="store_true", help="ejecuta hasta el análisis sintáctico")
+    ap.add_argument("--llvm", nargs="?", const="", metavar="SALIDA.ll", help="genera LLVM IR")
+    ap.add_argument("--ejecutar", action="store_true", help="genera LLVM IR y lo ejecuta (JIT)")
     args = ap.parse_args(argv)
 
     if not os.path.isfile(args.archivo):
         print(f"Error: no existe el archivo '{args.archivo}'.", file=sys.stderr)
         return 2
 
-    hasta = "lexico" if args.solo_lexico else "sintactico" if args.solo_sintactico else "semantico"
+    if args.solo_lexico:
+        hasta = "lexico"
+    elif args.solo_sintactico:
+        hasta = "sintactico"
+    elif args.llvm is not None or args.ejecutar:
+        hasta = "llvm"
+    else:
+        hasta = "semantico"
     res = compilar(ruta=args.archivo, hasta=hasta)
 
     print(f"Kipu {VERSION}  |  {args.archivo}")
-    fases = [("LEX", "Análisis léxico"), ("SIN", "Análisis sintáctico"), ("SEM", "Análisis semántico")]
-    limite = {"lexico": 1, "sintactico": 2, "semantico": 3}[hasta]
+    limite = {"lexico": 1, "sintactico": 2, "semantico": 3, "llvm": 4}[hasta]
     bloqueado = False
-    for i, (fase, nombre) in enumerate(fases[:limite], 1):
+    for i, (fase, nombre) in enumerate(FASES[:limite], 1):
         n = sum(1 for e in res.errores if e.fase == fase)
         if bloqueado:
             estado = "OMITIDO (errores en fases previas)"
@@ -155,7 +180,7 @@ def main(argv=None) -> int:
         else:
             estado = "OK" + (f" ({len(res.tokens)} tokens)" if fase == "LEX" else "")
         print(f"  [{i}/{limite}] {nombre:<20} {estado}")
-        if fase == "SIN" and any(e.fase in ("LEX", "SIN") for e in res.errores):
+        if n:
             bloqueado = True
 
     if args.tokens:
@@ -167,6 +192,18 @@ def main(argv=None) -> int:
     if args.simbolos and res.semantico is not None:
         print()
         imprimir_simbolos(res)
+
+    if res.ir is not None:
+        destino = args.llvm or os.path.splitext(args.archivo)[0] + ".ll"
+        with open(destino, "w", encoding="utf-8") as f:
+            f.write(res.ir)
+        print(f"\nLLVM IR escrito en {destino}")
+        if args.ejecutar:
+            from ejecutor import ejecutar
+            print("\n--- Ejecución (JIT LLVM) ---")
+            sys.stdout.flush()
+            codigo, _ = ejecutar(res.ir)
+            print(f"--- Fin (código de salida {codigo}) ---")
 
     print()
     if res.ok:

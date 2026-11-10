@@ -1,0 +1,14 @@
+// espera: SEM-08@3 SEM-08@7 SEM-08@10 SEM-08@13
+regla igvSoles(base: monto<PEN>): monto<PEN> {
+    retornar convertir(base, USD, 0.27);
+}
+regla imprimir(m: monto<PEN>) {
+    mostrar(m);
+    retornar m;
+}
+regla tasa(): porcentaje {
+    retornar;
+}
+regla cantidad(): entero {
+    retornar 2.5;
+}

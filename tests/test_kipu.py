@@ -1,4 +1,4 @@
-"""Pruebas automáticas del front end de Kipu (Hito 1).
+"""Pruebas automáticas del compilador Kipu (Hito 2).
 
 Ejecutar desde la raíz del repositorio:
     python -m unittest discover -s tests -v
@@ -8,14 +8,17 @@ Convención de los archivos .kp de prueba: la primera línea indica el resultado
     // espera: SEM-03@4 SEM-03@5      (código de error @ línea, en orden)
 Para las pruebas sintácticas inválidas solo se compara el primer error reportado,
 porque ANTLR puede emitir errores adicionales durante la recuperación.
+Las pruebas de LLVM (tests/llvm) comparan la salida de la ejecución JIT con el archivo .esperado.
 """
 import os
+import re
 import sys
 import unittest
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(RAIZ, "src"))
 sys.path.insert(0, os.path.join(RAIZ, "tests"))
+sys.path.insert(0, os.path.join(RAIZ, "scripts"))
 
 from antlr4 import CommonTokenStream, InputStream, Token  # noqa: E402
 
@@ -24,6 +27,7 @@ from errores import RecolectorErrores  # noqa: E402
 from generated.KipuLexer import KipuLexer  # noqa: E402
 from generated.KipuParser import KipuParser  # noqa: E402
 from kipu import compilar  # noqa: E402
+from semantico import DESCRIPCION_ERRORES  # noqa: E402
 
 DIR_PRUEBAS = os.path.join(RAIZ, "tests")
 
@@ -51,6 +55,29 @@ def tipos_de_token(codigo: str) -> list[str]:
     return [KipuLexer.symbolicNames[t.type] for t in lexer.getAllTokens()]
 
 
+# ----------------------------------------------------------------------------
+class PruebasGramatica(unittest.TestCase):
+    def test_lineamientos_del_curso(self):
+        """Kipu.g4 no usa ?, *, +, subreglas, etiquetas ni literales en el parser."""
+        from verificar_gramatica import verificar
+        self.assertEqual(verificar(os.path.join(RAIZ, "grammar", "Kipu.g4")), [])
+
+    def test_derivaciones_sin_ambiguedad(self):
+        """Los 35 ejemplos se reconocen completos y sin ambigüedad exacta."""
+        from derivaciones import analizar, derivacion_izquierda
+        from gramatica_bnf import producciones
+        prods = producciones()
+        for c in CONSTRUCCIONES:
+            for ejemplo in c["ejemplos"]:
+                with self.subTest(construccion=c["id"], ejemplo=ejemplo):
+                    arbol, parser, vig, completo = analizar(ejemplo, c["regla_antlr"])
+                    self.assertEqual(vig.errores, [])
+                    self.assertEqual(vig.ambiguedades, [])
+                    self.assertTrue(completo)
+                    for _, prod in derivacion_izquierda(arbol, parser)[1:]:
+                        self.assertIn(prod[1], prods[prod[0]])
+
+
 class PruebasLexicas(unittest.TestCase):
     def test_archivos_lexicos(self):
         for ruta in archivos("lexico"):
@@ -70,8 +97,8 @@ class PruebasLexicas(unittest.TestCase):
                          ["LIT_PORCENTAJE", "NUM_ENTERO", "NUM_DECIMAL", "LIT_PORCENTAJE"])
 
     def test_palabra_clave_vs_identificador(self):
-        self.assertEqual(tipos_de_token("si sino sinoCaso siguiente monto montos"),
-                         ["SI", "SINO", "ID", "ID", "MONTO", "ID"])
+        self.assertEqual(tipos_de_token("si sino sinoCaso siguiente monto montos año"),
+                         ["SI", "SINO", "ID", "ID", "MONTO", "ID", "ID"])
 
     def test_operadores_compuestos(self):
         self.assertEqual(tipos_de_token("<= >= == != += -= < > ="),
@@ -79,7 +106,16 @@ class PruebasLexicas(unittest.TestCase):
                           "MENOS_ASIG", "MENOR", "MAYOR", "ASIG"])
 
     def test_comentarios_ignorados(self):
-        self.assertEqual(tipos_de_token("a // comentario\n/* bloque\n */ b"), ["ID", "ID"])
+        self.assertEqual(tipos_de_token("a // comentario\nb"), ["ID", "ID"])
+
+    def test_sin_comentario_de_bloque(self):
+        # Por lineamiento se omite el comentario de bloque: /* se reconoce como DIV MULT
+        self.assertEqual(tipos_de_token("/* x */"), ["DIV", "MULT", "ID", "MULT", "DIV"])
+
+    def test_fragments_recursivos(self):
+        """ID, números y cadenas se reconocen con fragments recursivos (sin * ni +)."""
+        self.assertEqual(tipos_de_token('abc123 1234567 3.14159 "con \\"escape\\""'),
+                         ["ID", "NUM_ENTERO", "NUM_DECIMAL", "CADENA"])
 
 
 class PruebasSintacticas(unittest.TestCase):
@@ -123,6 +159,51 @@ class PruebasSemanticas(unittest.TestCase):
             with self.subTest(archivo=os.path.basename(ruta)):
                 res = compilar(ruta=ruta)
                 self.assertEqual(obtenido(res), esperado(ruta), [str(e) for e in res.errores])
+
+    def test_cobertura_de_errores(self):
+        """Cada error semántico SEM-01 a SEM-14 tiene al menos dos casos de prueba negativos."""
+        conteo = {codigo: 0 for codigo in DESCRIPCION_ERRORES}
+        for ruta in archivos("semantico", "invalidos"):
+            for marca in esperado(ruta):
+                conteo[marca.split("@")[0]] += 1
+        faltantes = {c: n for c, n in conteo.items() if n < 2}
+        self.assertEqual(faltantes, {}, "códigos con menos de 2 casos")
+
+
+class PruebasLLVM(unittest.TestCase):
+    def test_ir_valido_y_salida_esperada(self):
+        """El IR generado pasa el verificador de LLVM y la ejecución JIT produce la salida esperada."""
+        from ejecutor import ejecutar, verificar_ir
+        rutas = [r for r in archivos("llvm") if os.path.exists(r[:-3] + ".esperado")]
+        self.assertGreaterEqual(len(rutas), 5)
+        for ruta in rutas:
+            with self.subTest(archivo=os.path.basename(ruta)):
+                res = compilar(ruta=ruta, hasta="llvm")
+                self.assertEqual(obtenido(res), [], [str(e) for e in res.errores])
+                verificar_ir(res.ir)
+                codigo, salida = ejecutar(res.ir, eco=False)
+                with open(ruta[:-3] + ".esperado", encoding="utf-8") as f:
+                    self.assertEqual(salida, f.read())
+                self.assertEqual(codigo, 0)
+
+    def test_construccion_pendiente(self):
+        for ruta in archivos("llvm"):
+            if os.path.exists(ruta[:-3] + ".esperado"):
+                continue
+            with self.subTest(archivo=os.path.basename(ruta)):
+                res = compilar(ruta=ruta, hasta="llvm")
+                self.assertEqual(obtenido(res), esperado(ruta))
+
+    def test_ejemplo_detracciones(self):
+        from ejecutor import ejecutar
+        res = compilar(ruta=os.path.join(RAIZ, "ejemplos", "detracciones.kp"), hasta="llvm")
+        self.assertTrue(res.ok, [str(e) for e in res.errores])
+        _, salida = ejecutar(res.ir, eco=False)
+        self.assertIn("Total cobrado: 2701.12 PEN = 720.30 USD", salida)
+
+    def test_montos_en_centimos(self):
+        res = compilar(codigo="var m: monto<PEN> = 1250.50 PEN;\nmostrar(m);", hasta="llvm")
+        self.assertTrue(re.search(r"store i64 125050", res.ir), "el monto debe almacenarse en céntimos (i64)")
 
 
 if __name__ == "__main__":

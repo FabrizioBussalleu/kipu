@@ -1,0 +1,7 @@
+// espera: SEM-07@3 SEM-07@5
+var total: monto<PEN> = 50.00 PEN;
+retornar total;
+si (total > 10.00 PEN) {
+    retornar;
+}
+regla valida(): monto<PEN> { retornar total; }

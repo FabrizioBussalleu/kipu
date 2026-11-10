@@ -1,0 +1,8 @@
+// Aritmética entera y decimal, precedencia, módulo y ensanchamiento
+var a: entero = 17;
+var b: entero = 5;
+var x: decimal = 2.5;
+var w: decimal = a;
+mostrar(a + b * 2, (a + b) * 2, a - b - 2, -a + 1);
+mostrar(a / b, a mod b, x * 4, x + a, w);
+mostrar(a > b, a == 17, x <= 2.5, a != b y b < 3);

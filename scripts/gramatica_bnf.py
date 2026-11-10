@@ -1,94 +1,54 @@
-"""Gramática libre de contexto de Kipu en la notación del curso (BNF, sin EBNF).
+"""Extrae la gramática libre de contexto de grammar/Kipu.g4 en notación de producciones.
 
-Convención (Aho, Lam, Sethi y Ullman):
-  * No terminales: nombres en minúscula y cursiva (expr, decl, sentencias).
-  * Terminales: en negrita; son palabras clave y símbolos tal como se escriben
-    (var, :, ;) o clases de token del analizador léxico (id, num_ent, num_dec,
-    lit_porc, cadena, moneda).
-  * A → α | β separa alternativas; ε es la cadena vacía.
+Como Kipu.g4 está en forma estándar (sin ?, *, + ni subreglas), cada regla del parser es
+directamente un conjunto de producciones A -> α1 | α2 | ... | ε. Este módulo es la fuente que
+usan el informe y las derivaciones, así que la gramática del informe coincide regla por regla
+con la implementación.
 
-Es la misma fuente que usa scripts/derivaciones.py para verificar las derivaciones
-más a la izquierda y que usa el informe para imprimir las producciones.
+Uso: python scripts/gramatica_bnf.py
 """
+import os
+import sys
 
-EPS = []  # alternativa vacía (ε)
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(RAIZ, "scripts"))
 
-# Cada gramática: (id, título, [(no_terminal, [alternativas])]); cada alternativa es una lista de símbolos.
-GRAMATICAS = [
-    ("G0", "Estructura general del programa", [
-        ("programa", [["sentencias"]]),
-        ("sentencias", [["sentencia", "sentencias"], EPS]),
-        ("sentencia", [["decl"], ["asig"], ["sel"], ["iter"], ["def_regla"], ["ret"], ["es"], ["llam_sent"], ["bloque"]]),
-        ("bloque", [["{", "sentencias", "}"]]),
-    ]),
-    ("G1", "Declaración de variables y constantes", [
-        ("decl", [["var", "id", ":", "tipo", "init", ";"], ["const", "id", ":", "tipo", "=", "expr", ";"]]),
-        ("init", [["=", "expr"], EPS]),
-        ("tipo", [["entero"], ["decimal"], ["porcentaje"], ["booleano"], ["texto"], ["monto", "<", "moneda", ">"]]),
-    ]),
-    ("G2", "Asignación", [
-        ("asig", [["id", "op_asig", "expr", ";"]]),
-        ("op_asig", [["="], ["+="], ["-="]]),
-    ]),
-    ("G3", "Expresiones", [
-        ("expr", [["expr", "o", "conj"], ["conj"]]),
-        ("conj", [["conj", "y", "neg"], ["neg"]]),
-        ("neg", [["no", "neg"], ["igu"]]),
-        ("igu", [["igu", "op_igu", "rel"], ["rel"]]),
-        ("op_igu", [["=="], ["!="]]),
-        ("rel", [["rel", "op_rel", "arit"], ["arit"]]),
-        ("op_rel", [["<"], ["<="], [">"], [">="]]),
-        ("arit", [["arit", "op_sum", "term"], ["term"]]),
-        ("op_sum", [["+"], ["-"]]),
-        ("term", [["term", "op_mul", "unario"], ["unario"]]),
-        ("op_mul", [["*"], ["/"], ["mod"]]),
-        ("unario", [["-", "unario"], ["prim"]]),
-        ("prim", [["(", "expr", ")"], ["convertir", "(", "expr", ",", "moneda", ",", "expr", ")"],
-                  ["llamada"], ["lit"], ["id"]]),
-        ("lit", [["num", "moneda"], ["num_ent"], ["num_dec"], ["lit_porc"], ["cadena"], ["verdadero"], ["falso"]]),
-        ("num", [["num_ent"], ["num_dec"]]),
-        ("llamada", [["id", "(", "args", ")"]]),
-        ("args", [["expr", "args_resto"], EPS]),
-        ("args_resto", [[",", "expr", "args_resto"], EPS]),
-    ]),
-    ("G4", "Sentencias selectivas", [
-        ("sel", [["si", "(", "expr", ")", "bloque", "sino_parte"]]),
-        ("sino_parte", [["sino", "sino_cola"], EPS]),
-        ("sino_cola", [["sel"], ["bloque"]]),
-    ]),
-    ("G5", "Sentencias iterativas", [
-        ("iter", [["mientras", "(", "expr", ")", "bloque"],
-                  ["para", "id", "desde", "expr", "hasta", "expr", "paso_opc", "bloque"]]),
-        ("paso_opc", [["paso", "expr"], EPS]),
-    ]),
-    ("G6", "Reglas (funciones), retorno y llamadas", [
-        ("def_regla", [["regla", "id", "(", "params", ")", "tipo_ret", "bloque"]]),
-        ("params", [["param", "params_resto"], EPS]),
-        ("params_resto", [[",", "param", "params_resto"], EPS]),
-        ("param", [["id", ":", "tipo"]]),
-        ("tipo_ret", [[":", "tipo"], EPS]),
-        ("ret", [["retornar", "ret_expr", ";"]]),
-        ("ret_expr", [["expr"], EPS]),
-        ("llam_sent", [["llamada", ";"]]),
-    ]),
-    ("G7", "Entrada y salida", [
-        ("es", [["mostrar", "(", "expr", "args_resto", ")", ";"], ["leer", "(", "id", ")", ";"]]),
-    ]),
+from verificar_gramatica import reglas  # noqa: E402
+
+RUTA_G4 = os.path.join(RAIZ, "grammar", "Kipu.g4")
+
+# Agrupación de las reglas del parser por construcción (para el informe)
+GRUPOS = [
+    ("G0", "Estructura general del programa", ["programa", "listaSentencias", "sentencia", "bloque"]),
+    ("G1", "Declaración de variables y constantes", ["declaracion", "inicializacion", "tipo"]),
+    ("G2", "Asignación", ["asignacion", "opAsignacion"]),
+    ("G3", "Expresiones", ["expresion", "conjuncion", "negacion", "igualdad", "relacional", "aritmetica",
+                           "termino", "unario", "primario", "literal", "numero", "llamada", "argumentos",
+                           "argumentosCola"]),
+    ("G4", "Sentencias selectivas", ["seleccion", "parteSino", "colaSino"]),
+    ("G5", "Sentencias iterativas", ["iteracion", "pasoOpcional"]),
+    ("G6", "Reglas (funciones), retorno y llamadas", ["regla", "parametros", "parametrosCola", "parametro",
+                                                      "tipoRetorno", "retorno", "valorRetorno", "llamadaSentencia"]),
+    ("G7", "Entrada y salida", ["entradaSalida"]),
 ]
 
-PRODUCCIONES = {nt: alts for _, _, prods in GRAMATICAS for nt, alts in prods}
-NO_TERMINALES = set(PRODUCCIONES)
-TERMINALES = sorted({s for alts in PRODUCCIONES.values() for alt in alts for s in alt if s not in NO_TERMINALES})
 
-# Clases de token del lexer ANTLR que aparecen como terminales abstractos en la gramática.
-CLASE_TOKEN = {
-    "ID": "id",
-    "NUM_ENTERO": "num_ent",
-    "NUM_DECIMAL": "num_dec",
-    "LIT_PORCENTAJE": "lit_porc",
-    "CADENA": "cadena",
-    "MONEDA": "moneda",
-}
+def producciones() -> dict:
+    """{no_terminal: [[símbolos], ...]} en el orden de Kipu.g4; [] representa ε."""
+    with open(RUTA_G4, encoding="utf-8") as f:
+        texto = f.read()
+    salida = {}
+    for nombre, es_fragment, cuerpo in reglas(texto):
+        if not nombre[0].islower():
+            continue
+        cadena = "".join(v for _, v in cuerpo)
+        alternativas = [alt.split() for alt in cadena.split("|")]
+        salida[nombre] = alternativas
+    return salida
+
+
+def no_terminales() -> set:
+    return set(producciones())
 
 
 def texto_produccion(nt: str, alts) -> str:
@@ -96,9 +56,19 @@ def texto_produccion(nt: str, alts) -> str:
     return f"{nt} → {cuerpo}"
 
 
+def verificar_grupos() -> None:
+    prods = producciones()
+    agrupadas = [r for _, _, rs in GRUPOS for r in rs]
+    faltan = set(prods) - set(agrupadas)
+    sobran = set(agrupadas) - set(prods)
+    assert not faltan and not sobran, f"grupos desalineados: faltan {faltan}, sobran {sobran}"
+
+
 if __name__ == "__main__":
-    for gid, titulo, prods in GRAMATICAS:
+    verificar_grupos()
+    prods = producciones()
+    for gid, titulo, nombres in GRUPOS:
         print(f"{gid}. {titulo}")
-        for nt, alts in prods:
-            print("   ", texto_produccion(nt, alts))
-    print("\nTerminales:", " ".join(TERMINALES))
+        for nt in nombres:
+            print("   ", texto_produccion(nt, prods[nt]))
+    print(f"\n{len(prods)} no terminales, {sum(len(a) for a in prods.values())} producciones.")
