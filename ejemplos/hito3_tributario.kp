@@ -1,0 +1,23 @@
+// Programa interactivo: escribir una cantidad entera de facturas.
+const IGV: porcentaje = 18%;
+
+regla totalConIgv(base: monto<PEN>): monto<PEN> {
+    retornar base + base * IGV;
+}
+
+var cantidad: entero;
+leer(cantidad);
+var acumulado: monto<PEN> = 0.00 PEN;
+
+para factura desde 1 hasta cantidad {
+    acumulado += totalConIgv(249.90 PEN);
+}
+
+si (acumulado > 500.00 PEN) {
+    mostrar("Total sujeto a detracción:", acumulado);
+} sino {
+    mostrar("Total:", acumulado);
+}
+
+var dolares: monto<USD> = convertir(acumulado, USD, 0.2667);
+mostrar("Equivalente USD:", dolares);

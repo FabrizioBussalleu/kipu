@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 static const char *MONEDAS[] = {"PEN", "USD", "EUR"};
 
@@ -46,3 +47,51 @@ void kipu_imprimir_texto(const char *s) { fputs(s, stdout); }
 void kipu_imprimir_separador(void) { putchar(' '); }
 void kipu_imprimir_fin_linea(void) { putchar('\n'); }
 int32_t kipu_texto_igual(const char *a, const char *b) { return strcmp(a, b) == 0; }
+
+char *kipu_texto_concatenar(const char *a, const char *b) {
+    size_t tam = strlen(a) + strlen(b) + 1;
+    char *resultado = malloc(tam);
+    if (!resultado) { fputs("Sin memoria para texto Kipu\n", stderr); exit(1); }
+    strcpy(resultado, a);
+    strcat(resultado, b);
+    return resultado;
+}
+
+static void kipu_linea(char *texto, size_t capacidad) {
+    if (!fgets(texto, (int)capacidad, stdin)) {
+        fputs("Error al leer entrada Kipu\n", stderr);
+        exit(1);
+    }
+    texto[strcspn(texto, "\r\n")] = '\0';
+}
+
+int64_t kipu_leer_entero(void) {
+    char texto[256]; kipu_linea(texto, sizeof texto);
+    return (int64_t)strtoll(texto, NULL, 10);
+}
+double kipu_leer_decimal(void) {
+    char texto[256]; kipu_linea(texto, sizeof texto);
+    return strtod(texto, NULL);
+}
+int64_t kipu_leer_monto(void) {
+    char texto[256]; kipu_linea(texto, sizeof texto);
+    double escalado = strtod(texto, NULL) * 100.0;
+    return (int64_t)(escalado >= 0 ? escalado + 0.5 : escalado - 0.5);
+}
+int64_t kipu_leer_porcentaje(void) {
+    char texto[256]; kipu_linea(texto, sizeof texto);
+    double escalado = strtod(texto, NULL) * 100.0;
+    return (int64_t)(escalado >= 0 ? escalado + 0.5 : escalado - 0.5);
+}
+int32_t kipu_leer_booleano(void) {
+    char texto[256]; kipu_linea(texto, sizeof texto);
+    return strcmp(texto, "verdadero") == 0;
+}
+char *kipu_leer_texto(void) {
+    char texto[4096]; kipu_linea(texto, sizeof texto);
+    size_t tam = strlen(texto) + 1;
+    char *resultado = malloc(tam);
+    if (!resultado) { fputs("Sin memoria para texto Kipu\n", stderr); exit(1); }
+    memcpy(resultado, texto, tam);
+    return resultado;
+}

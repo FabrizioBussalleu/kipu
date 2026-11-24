@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ctypes
 import sys
+from decimal import Decimal, ROUND_HALF_UP
 
 import llvmlite.binding as llvm
 
@@ -55,6 +56,8 @@ class Runtime:
     def __init__(self, eco: bool = True):
         self.salida: list[str] = []
         self.eco = eco
+        self._cadenas = []
+        self.error_entrada = None
         V = None
         fns = {
             "kipu_imprimir_entero": (ctypes.CFUNCTYPE(V, ctypes.c_int64), lambda v: self._w(str(v))),
@@ -69,6 +72,14 @@ class Runtime:
             "kipu_imprimir_fin_linea": (ctypes.CFUNCTYPE(V), lambda: self._w("\n")),
             "kipu_texto_igual": (ctypes.CFUNCTYPE(ctypes.c_int32, ctypes.c_char_p, ctypes.c_char_p),
                                  lambda a, b: int(a == b)),
+            "kipu_texto_concatenar": (ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p),
+                                       lambda a, b: self._guardar_cadena(a + b)),
+            "kipu_leer_entero": (ctypes.CFUNCTYPE(ctypes.c_int64), lambda: self._leer(int, 0)),
+            "kipu_leer_decimal": (ctypes.CFUNCTYPE(ctypes.c_double), lambda: self._leer(float, 0.0)),
+            "kipu_leer_monto": (ctypes.CFUNCTYPE(ctypes.c_int64), lambda: self._leer(lambda s: self._escalar(s, 100), 0)),
+            "kipu_leer_porcentaje": (ctypes.CFUNCTYPE(ctypes.c_int64), lambda: self._leer(lambda s: self._escalar(s.rstrip('%'), 100), 0)),
+            "kipu_leer_booleano": (ctypes.CFUNCTYPE(ctypes.c_int32), lambda: self._leer(self._booleano, 0)),
+            "kipu_leer_texto": (ctypes.CFUNCTYPE(ctypes.c_void_p), lambda: self._guardar_cadena(self._leer(str, "").encode("utf-8"))),
         }
         self._refs = []                   # mantiene vivos los callbacks
         for nombre, (proto, fn) in fns.items():
@@ -80,6 +91,29 @@ class Runtime:
         self.salida.append(texto)
         if self.eco:
             sys.stdout.write(texto)
+
+    def _guardar_cadena(self, datos: bytes) -> int:
+        buffer = ctypes.create_string_buffer(datos)
+        self._cadenas.append(buffer)
+        return ctypes.addressof(buffer)
+
+    @staticmethod
+    def _escalar(texto: str, escala: int) -> int:
+        return int((Decimal(texto) * escala).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+    @staticmethod
+    def _booleano(texto: str) -> int:
+        valor = texto.strip().lower()
+        if valor not in ("verdadero", "falso"):
+            raise ValueError("Se esperaba 'verdadero' o 'falso'.")
+        return int(valor == "verdadero")
+
+    def _leer(self, convertir, defecto):
+        try:
+            return convertir(input())
+        except (ValueError, EOFError) as exc:
+            self.error_entrada = str(exc)
+            return defecto
 
     @property
     def texto(self) -> str:
@@ -109,4 +143,6 @@ def ejecutar(codigo_ir: str, eco: bool = True) -> tuple[int, str]:
         direccion = motor.get_function_address("main")
         main = ctypes.CFUNCTYPE(ctypes.c_int32)(direccion)
         codigo = main()
+    if runtime.error_entrada is not None:
+        raise ValueError(f"Entrada Kipu inválida: {runtime.error_entrada}")
     return codigo, runtime.texto

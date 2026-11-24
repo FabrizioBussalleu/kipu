@@ -11,6 +11,7 @@ porque ANTLR puede emitir errores adicionales durante la recuperación.
 Las pruebas de LLVM (tests/llvm) comparan la salida de la ejecución JIT con el archivo .esperado.
 """
 import os
+import io
 import re
 import sys
 import unittest
@@ -27,7 +28,7 @@ from errores import RecolectorErrores  # noqa: E402
 from generated.KipuLexer import KipuLexer  # noqa: E402
 from generated.KipuParser import KipuParser  # noqa: E402
 from kipu import compilar  # noqa: E402
-from semantico import DESCRIPCION_ERRORES  # noqa: E402
+from visitor_semantico import DESCRIPCION_ERRORES  # noqa: E402
 
 DIR_PRUEBAS = os.path.join(RAIZ, "tests")
 
@@ -175,7 +176,7 @@ class PruebasLLVM(unittest.TestCase):
         """El IR generado pasa el verificador de LLVM y la ejecución JIT produce la salida esperada."""
         from ejecutor import ejecutar, verificar_ir
         rutas = [r for r in archivos("llvm") if os.path.exists(r[:-3] + ".esperado")]
-        self.assertGreaterEqual(len(rutas), 5)
+        self.assertGreaterEqual(len(rutas), 6)
         for ruta in rutas:
             with self.subTest(archivo=os.path.basename(ruta)):
                 res = compilar(ruta=ruta, hasta="llvm")
@@ -204,6 +205,42 @@ class PruebasLLVM(unittest.TestCase):
     def test_montos_en_centimos(self):
         res = compilar(codigo="var m: monto<PEN> = 1250.50 PEN;\nmostrar(m);", hasta="llvm")
         self.assertTrue(re.search(r"store i64 125050", res.ir), "el monto debe almacenarse en céntimos (i64)")
+
+    def test_reglas_retorno_ambos_caminos_y_global(self):
+        from ejecutor import ejecutar, verificar_ir
+        codigo = '''var base: entero = 10;
+regla elegir(x: entero): entero {
+    si (x > 0) { retornar x + base; }
+    sino { retornar -1; }
+}
+mostrar(elegir(5), elegir(-5));'''
+        res = compilar(codigo=codigo, hasta="llvm")
+        self.assertTrue(res.ok, [str(e) for e in res.errores])
+        verificar_ir(res.ir)
+        self.assertEqual(ejecutar(res.ir, eco=False), (0, "15 -1\n"))
+
+    def test_leer_y_concatenar_en_jit(self):
+        from ejecutor import ejecutar, verificar_ir
+        codigo = '''var numero: entero; leer(numero);
+var importe: monto<PEN>; leer(importe);
+var tasa: porcentaje; leer(tasa);
+var activo: booleano; leer(activo);
+var nombre: texto; leer(nombre);
+mostrar(nombre + ":", numero, importe, tasa, activo);'''
+        res = compilar(codigo=codigo, hasta="llvm")
+        self.assertTrue(res.ok, [str(e) for e in res.errores])
+        verificar_ir(res.ir)
+        original = sys.stdin
+        try:
+            sys.stdin = io.StringIO("7\n12.345\n18%\nverdadero\nIGV\n")
+            self.assertEqual(ejecutar(res.ir, eco=False), (0, "IGV: 7 12.35 PEN 18% verdadero\n"))
+        finally:
+            sys.stdin = original
+
+    def test_no_genera_llvm_si_hay_error_semantico(self):
+        res = compilar(codigo="mostrar(no_declarada);", hasta="llvm")
+        self.assertEqual(res.codigos(), ["SEM-01"])
+        self.assertIsNone(res.ir)
 
 
 if __name__ == "__main__":

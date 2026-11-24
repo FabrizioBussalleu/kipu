@@ -1,4 +1,4 @@
-"""Driver del compilador Kipu (Hito 2).
+"""Driver del compilador Kipu.
 
 Uso:
     python src/kipu.py <archivo.kp> [opciones]
@@ -8,7 +8,7 @@ Opciones de fase:        --solo-lexico  --solo-sintactico
 Back end (LLVM):         --llvm [salida.ll]   genera LLVM IR (por defecto junto al fuente)
                          --ejecutar          genera el IR y lo ejecuta con el JIT de LLVM
 
-Fases: léxico (ANTLR) -> sintáctico (ANTLR) -> construcción del AST -> semántico -> LLVM IR.
+Fases: léxico (ANTLR) -> sintáctico (ANTLR) -> Visitor semántico -> Visitor LLVM.
 Código de salida: 0 sin errores, 1 con errores, 2 si el archivo no existe.
 """
 import argparse
@@ -20,13 +20,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from antlr4 import CommonTokenStream, FileStream, InputStream, Token  # noqa: E402
 from antlr4.tree.Tree import TerminalNode  # noqa: E402
 
-from constructor_ast import ConstructorAST  # noqa: E402
 from errores import ErrorCompilacion, RecolectorErrores  # noqa: E402
 from generated.KipuLexer import KipuLexer  # noqa: E402
 from generated.KipuParser import KipuParser  # noqa: E402
-from semantico import AnalizadorSemantico  # noqa: E402
+from visitor_semantico import VisitorSemantico  # noqa: E402
 
-VERSION = "0.2.0 (Hito 2)"
+VERSION = "0.3.0 (Hito 3)"
 FASES = [("LEX", "Análisis léxico"), ("SIN", "Análisis sintáctico"), ("SEM", "Análisis semántico"),
          ("GEN", "Generación LLVM IR")]
 
@@ -36,7 +35,6 @@ class ResultadoCompilacion:
         self.tokens = []
         self.arbol = None
         self.parser = None
-        self.ast = None
         self.semantico = None
         self.ir = None
         self.errores: list[ErrorCompilacion] = []
@@ -77,22 +75,27 @@ def compilar(codigo: str | None = None, ruta: str | None = None, hasta: str = "s
     if hasta == "sintactico" or res.errores:
         return res
 
-    # Fase 3: AST y análisis semántico
-    res.ast = ConstructorAST().visit(res.arbol)
-    sem = AnalizadorSemantico()
-    sem.analizar(res.ast)
+    # Fase 3: análisis directo del árbol de ANTLR.
+    sem = VisitorSemantico()
+    sem.visit(res.arbol)
     res.semantico = sem
     res.errores.extend(sem.errores)
     if hasta == "semantico" or res.errores:
         return res
 
     # Fase 4: generación de LLVM IR
-    from generador_llvm import ErrorGeneracion, GeneradorLLVM
+    from visitor_llvm import ErrorGeneracion, LLVMVisitor
     nombre = os.path.splitext(os.path.basename(ruta))[0] if ruta else "kipu"
     try:
-        res.ir = str(GeneradorLLVM(nombre).generar(res.ast))
+        generador = LLVMVisitor(nombre)
+        res.ir = str(generador.visit(res.arbol))
+        from ejecutor import verificar_ir
+        verificar_ir(res.ir)
     except ErrorGeneracion as exc:
         res.errores.append(exc.error)
+    except RuntimeError as exc:
+        res.ir = None
+        res.errores.append(ErrorCompilacion("GEN", "GEN-01", 1, 1, f"LLVM IR inválido: {exc}"))
     return res
 
 
@@ -202,7 +205,11 @@ def main(argv=None) -> int:
             from ejecutor import ejecutar
             print("\n--- Ejecución (JIT LLVM) ---")
             sys.stdout.flush()
-            codigo, _ = ejecutar(res.ir)
+            try:
+                codigo, _ = ejecutar(res.ir)
+            except ValueError as exc:
+                print(f"Error de entrada: {exc}", file=sys.stderr)
+                return 1
             print(f"--- Fin (código de salida {codigo}) ---")
 
     print()
