@@ -25,7 +25,7 @@ from generated.KipuLexer import KipuLexer  # noqa: E402
 from generated.KipuParser import KipuParser  # noqa: E402
 from visitor_semantico import VisitorSemantico  # noqa: E402
 
-VERSION = "0.3.0 (Hito 3)"
+VERSION = "0.3.0"
 FASES = [("LEX", "Análisis léxico"), ("SIN", "Análisis sintáctico"), ("SEM", "Análisis semántico"),
          ("GEN", "Generación LLVM IR")]
 
@@ -146,7 +146,7 @@ def main(argv=None) -> int:
         except AttributeError:
             pass
 
-    ap = argparse.ArgumentParser(prog="kipu", description="Compilador del lenguaje Kipu (Hito 2)")
+    ap = argparse.ArgumentParser(prog="kipu", description="Compilador del lenguaje Kipu")
     ap.add_argument("archivo", help="programa fuente .kp")
     ap.add_argument("--tokens", action="store_true", help="muestra la tabla de tokens")
     ap.add_argument("--arbol", action="store_true", help="muestra el árbol sintáctico")
