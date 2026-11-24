@@ -1,6 +1,6 @@
 # Presentación final de Kipu
 
-**Estado:** guion de diapositivas para revisión del equipo. Ajustar número de diapositivas y formato tras consultar la rúbrica oficial.
+**Estado:** contenido de diapositivas para revisión del equipo. La consigna exige exportar la presentación final a PDF. El equipo debe preparar ese PDF, ensayar la exposición formal y confirmar que domina las preguntas; la rúbrica reserva evaluación para documentos, código, exposición e interrogación.
 
 ## 1. Kipu y el problema
 
@@ -32,8 +32,8 @@ Explicar bloques de `si`, `mientras` y `para`; `ir.Function`, parámetros, `call
 
 ## 8. Validación
 
-20 pruebas iniciales, 28 finales; L1 a L6 aprobados; 28 derivaciones comprobadas; IR verificado y JIT en Windows. Programa con entrada 3: `884.64 PEN` y `235.93 USD`.
+20 pruebas iniciales, 29 finales; L1 a L6 aprobados; 28 derivaciones comprobadas; IR verificado y JIT en Windows. Programa con entrada 3: `884.64 PEN` y `235.93 USD`.
 
 ## 9. Límites y cierre
 
-Clang no estaba disponible para probar el ejecutable nativo. Reglas locales dentro de bloques siguen fuera de la generación LLVM. Consigna oficial y reglas de autoría deben ser verificadas por el equipo antes de la entrega.
+Clang no estaba disponible para probar el ejecutable nativo. Las reglas locales siguen fuera de la generación LLVM y su restricción semántica está propuesta para aprobación. Mostrar qué debe revisar y presentar personalmente el equipo: autoría, PDF final, video de hasta cinco minutos y respuestas técnicas.

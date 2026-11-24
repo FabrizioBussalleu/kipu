@@ -1,6 +1,6 @@
 # Kipu: informe técnico del Hito 3
 
-**Estado:** borrador técnico para revisión del equipo, 24 de noviembre de 2026. No se localizó en el repositorio la consigna oficial ni la rúbrica del Hito 3; el formato y la extensión finales requieren cotejo con esos documentos.
+**Estado:** contenido técnico para revisión del equipo, 24 de noviembre de 2026. Se contrastó con la transcripción `PAUTAS_ENTREGA_FINAL.md` aportada por el estudiante; no se adjuntó el PDF original. La consigna exige presentación final en PDF y video de máximo cinco minutos. No fija límite independiente de páginas para el informe del Hito 3. La matriz detallada está en `docs/hito3/matriz_cumplimiento.md`.
 
 ## 1. Problema y objetivo
 
@@ -11,6 +11,8 @@ Kipu permite expresar cálculos tributarios en español con tipos de dinero, por
 La fuente vigente es `grammar/Kipu.g4`. Contiene declaraciones `var` y `const`, asignaciones, expresiones con precedencia, bloques, `si`/`sino`, `mientras`, `para`, reglas con parámetros y retorno, llamadas, `leer`, `mostrar` y `convertir`. Los tipos son `entero`, `decimal`, `porcentaje`, `booleano`, `texto` y `monto<M>` para PEN, USD y EUR. No se alteró la gramática durante esta fase. Los archivos generados de ANTLR 4.13.2 están en `src/generated/`.
 
 El lexer reconoce palabras reservadas, identificadores, literales, operadores y comentarios de línea. El parser devuelve el árbol de contextos de ANTLR. La gramática mantiene los lineamientos L1 a L6 que verifica `scripts/verificar_gramatica.py`; `scripts/derivaciones.py` comprobó 28 derivaciones.
+
+La consigna acumula los Hitos 1 y 2 en el informe final. La problemática, objetivos y siete construcciones se documentan aquí y en el anexo A. El anexo B contiene token y lexema. `docs/hito3/gramatica_bnf.txt` recoge las producciones por construcción; `docs/anexo_derivaciones.md` incorpora cuatro derivaciones más a la izquierda por cada G1–G7. El Hito 1 exigía al menos dos errores semánticos y el Hito 2 elevó el mínimo a seis; Kipu conserva catorce. La arquitectura y el plan de validación se actualizan en las secciones 3 y 7. El informe histórico del Hito 1 tiene 11 páginas, superior al límite de cinco más carátula de la consigna transcrita; se conserva sin alterarlo y se registra la discrepancia en la matriz.
 
 ## 3. Arquitectura
 
@@ -59,10 +61,149 @@ El Hito 3 añade reglas con y sin retorno, parámetros, llamadas, recursión, `l
 4. Ejecutar por JIT los programas válidos y comparar la salida con `.esperado`.
 5. Ejecutar `ejemplos/visitor_builder.kp` y `ejemplos/hito3_tributario.kp` en PowerShell.
 
-Resultados medidos en Windows 11 con Python 3.12.7, ANTLR runtime 4.13.2 y llvmlite 0.50.0: línea base Hito 2, 20/20 pruebas; versión refactorizada, 28/28; verificación L1 a L6 aprobada; 28 derivaciones sin fallo. Con entrada `3`, el programa tributario mostró `884.64 PEN` y `235.93 USD`. El ejemplo mínimo mostró `22`. Los casos LLVM de prueba pasaron por el verificador y JIT. La validación nativa con Clang no se ejecutó.
+Resultados medidos en Windows 11 con Python 3.12.7, ANTLR runtime 4.13.2 y llvmlite 0.50.0: línea base Hito 2, 20/20 pruebas; versión refactorizada, 29/29; verificación L1 a L6 aprobada; 28 derivaciones sin fallo. Con entrada `3`, el programa tributario mostró `884.64 PEN` y `235.93 USD`. El ejemplo mínimo mostró `22`. Los casos LLVM de prueba pasaron por el verificador y JIT. La validación nativa con Clang no se ejecutó.
 
 ## 8. Conclusiones y límites
 
 La conexión directa entre el árbol de ANTLR y `IRBuilder` quedó visible en métodos `visit` explícitos. Los 14 códigos semánticos conservaron su cobertura y las pruebas pasaron tras la migración. La representación entera de montos mantiene el cálculo de céntimos y el redondeo previsto.
 
-El generador admite reglas globales; una regla declarada dentro de un bloque produce `GEN-01` con explicación. La entrada nativa en C no tiene la misma validación de texto que el JIT de Python y aún necesita prueba con Clang. El equipo debe cotejar este informe con la consigna, la rúbrica, el límite de páginas, las reglas de autoría y el formato de entrega oficiales antes de presentarlo. Las contribuciones individuales del Hito 3 requieren confirmación humana.
+El generador admite reglas globales; una regla declarada dentro de un bloque produce `GEN-01` con explicación. `docs/hito3/propuesta_reglas_locales.md` plantea restringirlas semánticamente si el equipo aprueba ese alcance; no se cambió silenciosamente el lenguaje. La entrada y la memoria del runtime C se revisaron, pero aún necesitan compilación y ejecución con Clang para declararse verificadas. La consigna no exige EXE expresamente. La presentación PDF y el video final requieren producción y revisión directas de los integrantes. También deben verificar la autoría y consultar al docente qué asistencia externa está permitida; este informe no atribuye contribuciones individuales.
+
+## Anexo A. Cinco ejemplos por construcción
+
+Los 35 ejemplos siguientes se extraen de `tests/construcciones.py`, fuente usada por las pruebas del parser.
+
+### G1. Declaración de variables y constantes
+
+```kipu
+var cantidad: entero = 3;
+const IGV: porcentaje = 18%;
+var subtotal: monto<PEN> = 1250.50 PEN;
+var razonSocial: texto = "Elaris SAC";
+var esAgenteRetencion: booleano;
+```
+
+### G2. Asignación
+
+```kipu
+cantidad = 5;
+subtotal = precio * cantidad;
+total += igv;
+saldo -= 150.00 PEN;
+exonerado = falso;
+```
+
+### G3. Expresiones aritméticas, monetarias, relacionales y lógicas
+
+```kipu
+precio * cantidad + flete
+base * 18%
+(total - detraccion) / 2
+total >= 700.00 PEN y no exonerado
+convertir(neto, USD, 3.75)
+```
+
+### G4. Sentencias selectivas
+
+```kipu
+si (total > 700.00 PEN) { detraccion = total * 12%; }
+si (esExportacion) { igv = 0.00 PEN; } sino { igv = base * 18%; }
+si (tipo == 1) { tasa = 12%; } sino si (tipo == 2) { tasa = 10%; } sino { tasa = 4%; }
+si (no pagado y diasAtraso > 30) { mostrar("Factura vencida"); }
+si (saldo <= 0.00 PEN) { cancelado = verdadero; } sino { saldo -= cuota; }
+```
+
+### G5. Sentencias iterativas
+
+```kipu
+mientras (saldo > 0.00 PEN) { saldo -= cuota; }
+para mes desde 1 hasta 12 { total += cuota; }
+para i desde 1 hasta n paso 2 { mostrar(i); }
+mientras (intentos < 3 y no validado) { intentos += 1; }
+para anio desde 2020 hasta 2026 { si (anio mod 4 == 0) { dias = 366; } }
+```
+
+### G6. Reglas (funciones), retorno y llamadas
+
+```kipu
+regla calcularIgv(base: monto<PEN>): monto<PEN> { retornar base * 18%; }
+regla esMayor(a: entero, b: entero): booleano { retornar a > b; }
+regla imprimirCabecera() { mostrar("FACTURA ELECTRONICA"); }
+regla cuota(total: monto<PEN>, n: entero): monto<PEN> { retornar total / n; }
+regla neto(total: monto<PEN>, tasa: porcentaje): monto<PEN> { retornar total - calcularDescuento(total, tasa); }
+```
+
+### G7. Entrada y salida
+
+```kipu
+mostrar("Total:", total);
+mostrar(subtotal + igv);
+leer(cantidad);
+mostrar("IGV", calcularIgv(base), "Neto", neto);
+leer(precioUnitario);
+```
+
+## Anexo B. Léxico en formato token y lexema
+
+Esta tabla reproduce las reglas de token de `grammar/Kipu.g4`; las expresiones y fragments completos están en ese archivo.
+
+| Token | Lexema o regla léxica |
+|---|---|
+| `VAR` | `'var'` |
+| `CONST` | `'const'` |
+| `ENTERO` | `'entero'` |
+| `DECIMAL` | `'decimal'` |
+| `PORCENTAJE` | `'porcentaje'` |
+| `BOOLEANO` | `'booleano'` |
+| `TEXTO` | `'texto'` |
+| `MONTO` | `'monto'` |
+| `MONEDA` | `'PEN' \| 'USD' \| 'EUR'` |
+| `SI` | `'si'` |
+| `SINO` | `'sino'` |
+| `MIENTRAS` | `'mientras'` |
+| `PARA` | `'para'` |
+| `DESDE` | `'desde'` |
+| `HASTA` | `'hasta'` |
+| `PASO` | `'paso'` |
+| `REGLA` | `'regla'` |
+| `RETORNAR` | `'retornar'` |
+| `MOSTRAR` | `'mostrar'` |
+| `LEER` | `'leer'` |
+| `CONVERTIR` | `'convertir'` |
+| `Y` | `'y'` |
+| `O` | `'o'` |
+| `NO` | `'no'` |
+| `VERDADERO` | `'verdadero'` |
+| `FALSO` | `'falso'` |
+| `MOD` | `'mod'` |
+| `MAS_ASIG` | `'+='` |
+| `MENOS_ASIG` | `'-='` |
+| `IGUAL` | `'=='` |
+| `DIFERENTE` | `'!='` |
+| `MENOR_IGUAL` | `'<='` |
+| `MAYOR_IGUAL` | `'>='` |
+| `MENOR` | `'<'` |
+| `MAYOR` | `'>'` |
+| `ASIG` | `'='` |
+| `SUMA` | `'+'` |
+| `RESTA` | `'-'` |
+| `MULT` | `'*'` |
+| `DIV` | `'/'` |
+| `PAR_IZQ` | `'('` |
+| `PAR_DER` | `')'` |
+| `LLAVE_IZQ` | `'{'` |
+| `LLAVE_DER` | `'}'` |
+| `PUNTO_COMA` | `';'` |
+| `COMA` | `','` |
+| `DOS_PUNTOS` | `':'` |
+| `LIT_PORCENTAJE` | `DIGITOS '%' \| DIGITOS '.' DIGITOS '%'` |
+| `NUM_DECIMAL` | `DIGITOS '.' DIGITOS` |
+| `NUM_ENTERO` | `DIGITOS` |
+| `CADENA` | `'"' CADENA_COLA '"'` |
+| `ID` | `LETRA ID_COLA` |
+| `COMENTARIO` | `'//' COMENTARIO_COLA -> skip` |
+| `ESPACIO` | `BLANCO ESPACIO_COLA -> skip` |
+
+## Anexo C. Gramática y derivaciones
+
+La notación de producciones vigente se adjunta en `docs/hito3/gramatica_bnf.txt`. Las 28 derivaciones más a la izquierda de cuatro ejemplos por cada G1–G7 están en `docs/anexo_derivaciones.md`; `scripts/derivaciones.py` regeneró y verificó ese anexo. La fuente ejecutable sigue siendo `grammar/Kipu.g4`.
