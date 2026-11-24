@@ -7,8 +7,9 @@ Para un ejecutable nativo se usa runtime/kipu_runtime.c (Hito 3).
 from __future__ import annotations
 
 import ctypes
+import math
 import sys
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 import llvmlite.binding as llvm
 
@@ -74,10 +75,10 @@ class Runtime:
                                  lambda a, b: int(a == b)),
             "kipu_texto_concatenar": (ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p),
                                        lambda a, b: self._guardar_cadena(a + b)),
-            "kipu_leer_entero": (ctypes.CFUNCTYPE(ctypes.c_int64), lambda: self._leer(int, 0)),
-            "kipu_leer_decimal": (ctypes.CFUNCTYPE(ctypes.c_double), lambda: self._leer(float, 0.0)),
+            "kipu_leer_entero": (ctypes.CFUNCTYPE(ctypes.c_int64), lambda: self._leer(self._entero, 0)),
+            "kipu_leer_decimal": (ctypes.CFUNCTYPE(ctypes.c_double), lambda: self._leer(self._decimal, 0.0)),
             "kipu_leer_monto": (ctypes.CFUNCTYPE(ctypes.c_int64), lambda: self._leer(lambda s: self._escalar(s, 100), 0)),
-            "kipu_leer_porcentaje": (ctypes.CFUNCTYPE(ctypes.c_int64), lambda: self._leer(lambda s: self._escalar(s.rstrip('%'), 100), 0)),
+            "kipu_leer_porcentaje": (ctypes.CFUNCTYPE(ctypes.c_int64), lambda: self._leer(self._porcentaje, 0)),
             "kipu_leer_booleano": (ctypes.CFUNCTYPE(ctypes.c_int32), lambda: self._leer(self._booleano, 0)),
             "kipu_leer_texto": (ctypes.CFUNCTYPE(ctypes.c_void_p), lambda: self._guardar_cadena(self._leer(str, "").encode("utf-8"))),
         }
@@ -99,7 +100,33 @@ class Runtime:
 
     @staticmethod
     def _escalar(texto: str, escala: int) -> int:
-        return int((Decimal(texto) * escala).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+        valor = int((Decimal(texto) * escala).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+        if not -(2**63) <= valor < 2**63:
+            raise ValueError("Valor fuera del rango de i64.")
+        return valor
+
+    @staticmethod
+    def _entero(texto: str) -> int:
+        valor = int(texto)
+        if not -(2**63) <= valor < 2**63:
+            raise ValueError("Entero fuera del rango de i64.")
+        return valor
+
+    @staticmethod
+    def _decimal(texto: str) -> float:
+        valor = float(texto)
+        if not math.isfinite(valor):
+            raise ValueError("Se esperaba un decimal finito.")
+        return valor
+
+    def _porcentaje(self, texto: str) -> int:
+        limpio = texto.strip()
+        if limpio.endswith("%"):
+            limpio = limpio[:-1]
+        valor = Decimal(limpio)
+        if not Decimal(0) <= valor <= Decimal(100):
+            raise ValueError("Porcentaje fuera de 0 a 100.")
+        return self._escalar(str(valor), 100)
 
     @staticmethod
     def _booleano(texto: str) -> int:
@@ -111,7 +138,7 @@ class Runtime:
     def _leer(self, convertir, defecto):
         try:
             return convertir(input())
-        except (ValueError, EOFError) as exc:
+        except (ValueError, OverflowError, InvalidOperation, EOFError) as exc:
             self.error_entrada = str(exc)
             return defecto
 

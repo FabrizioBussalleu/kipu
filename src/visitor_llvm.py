@@ -59,11 +59,11 @@ class LLVMVisitor(KipuVisitor):
 
     def _crear_div_redondeo(self) -> ir.Function:
         """i64 kipu.div_redondeo(i64 a, i64 b): a / b redondeado half-up (alejándose de cero)."""
-        fn = ir.Function(self.modulo, ir.FunctionType(I64, [I64, I64]), name="kipu.div_redondeo")
-        fn.linkage = "internal"
-        a, b = fn.args
+        funcion_redondeo = ir.Function(self.modulo, ir.FunctionType(I64, [I64, I64]), name="kipu.div_redondeo")
+        funcion_redondeo.linkage = "internal"
+        a, b = funcion_redondeo.args
         a.name, b.name = "a", "b"
-        bld = ir.IRBuilder(fn.append_basic_block("entrada"))
+        bld = ir.IRBuilder(funcion_redondeo.append_basic_block("entrada"))
         cero = ir.Constant(I64, 0)
         q = bld.sdiv(a, b, name="cociente")
         r = bld.srem(a, b, name="resto")
@@ -74,7 +74,7 @@ class LLVMVisitor(KipuVisitor):
         negativo = bld.xor(bld.icmp_signed("<", a, cero), bld.icmp_signed("<", b, cero), name="signo_negativo")
         signo = bld.select(negativo, ir.Constant(I64, -1), ir.Constant(I64, 1), name="signo")
         bld.ret(bld.add(q, bld.select(ajustar, signo, cero), name="resultado"))
-        return fn
+        return funcion_redondeo
 
     def _alloca(self, simbolo, tipo: Tipo):
         if simbolo.ambito == "global":
@@ -82,7 +82,7 @@ class LLVMVisitor(KipuVisitor):
             puntero.initializer = ir.Constant(tipo_llvm(tipo), None)
             self.variables[id(simbolo)] = puntero
             return puntero
-        ptr = self.b_alloca.alloca(tipo_llvm(tipo), name=simbolo.nombre)
+        ptr = self.builder_entrada.alloca(tipo_llvm(tipo), name=simbolo.nombre)
         self.variables[id(simbolo)] = ptr
         return ptr
 
@@ -113,50 +113,50 @@ class LLVMVisitor(KipuVisitor):
             return self.builder.sitofp(valor, F64)
         return valor
 
-    def _comparacion(self, op, a, ta, b, tb):
-        if ta.es_numerico and tb.es_numerico and DECIMAL in (ta, tb):
-            return self.builder.fcmp_ordered(op, self._a_double(a, ta), self._a_double(b, tb), name="cmp")
-        if ta.nombre == "texto":
+    def _comparacion(self, op, a, tipo_izquierda, b, tipo_derecha):
+        if tipo_izquierda.es_numerico and tipo_derecha.es_numerico and DECIMAL in (tipo_izquierda, tipo_derecha):
+            return self.builder.fcmp_ordered(op, self._a_double(a, tipo_izquierda), self._a_double(b, tipo_derecha), name="cmp")
+        if tipo_izquierda.nombre == "texto":
             igual = self.builder.icmp_signed("!=", self.builder.call(self.rt["texto_igual"], [a, b]), ir.Constant(I32, 0))
             return igual if op == "==" else self.builder.not_(igual)
-        if ta.nombre == "booleano":
+        if tipo_izquierda.nombre == "booleano":
             return self.builder.icmp_unsigned(op, a, b, name="cmp")
         return self.builder.icmp_signed(op, a, b, name="cmp")
 
-    def _aritmetica(self, op, a, ta, b, tb, nodo):
+    def _aritmetica(self, op, a, tipo_izquierda, b, tipo_derecha, nodo):
         """Devuelve (valor, tipo_resultado) siguiendo las reglas del sistema de tipos."""
-        b_ = self.builder
-        if ta.es_numerico and tb.es_numerico:
+        builder_actual = self.builder
+        if tipo_izquierda.es_numerico and tipo_derecha.es_numerico:
             if op == "mod":
-                return b_.srem(a, b, name="mod"), ENTERO
-            if op == "/" or DECIMAL in (ta, tb):
-                x, y = self._a_double(a, ta), self._a_double(b, tb)
-                f = {"+": b_.fadd, "-": b_.fsub, "*": b_.fmul, "/": b_.fdiv}[op]
+                return builder_actual.srem(a, b, name="mod"), ENTERO
+            if op == "/" or DECIMAL in (tipo_izquierda, tipo_derecha):
+                x, y = self._a_double(a, tipo_izquierda), self._a_double(b, tipo_derecha)
+                f = {"+": builder_actual.fadd, "-": builder_actual.fsub, "*": builder_actual.fmul, "/": builder_actual.fdiv}[op]
                 return f(x, y, name="r"), DECIMAL
-            f = {"+": b_.add, "-": b_.sub, "*": b_.mul}[op]
+            f = {"+": builder_actual.add, "-": builder_actual.sub, "*": builder_actual.mul}[op]
             return f(a, b, name="r"), ENTERO
         escalados = ("monto", "porcentaje")
-        if op in ("+", "-") and ta.nombre in escalados and ta == tb:
-            return (b_.add if op == "+" else b_.sub)(a, b, name="r"), ta
+        if op in ("+", "-") and tipo_izquierda.nombre in escalados and tipo_izquierda == tipo_derecha:
+            return (builder_actual.add if op == "+" else builder_actual.sub)(a, b, name="r"), tipo_izquierda
         if op == "*":
             # normalizar: el operando escalado (monto/porcentaje) a la izquierda
-            if tb.nombre == "monto" or (tb.nombre == "porcentaje" and ta.nombre != "monto"):
-                a, ta, b, tb = b, tb, a, ta
-            if tb == ENTERO:
-                return b_.mul(a, b, name="r"), ta
-            if tb == DECIMAL:
-                return self._redondear(b_.fmul(b_.sitofp(a, F64), b)), ta
-            if tb.nombre == "porcentaje":
-                prod = b_.mul(a, b, name="prod")
-                return b_.call(self.div_redondeo, [prod, ir.Constant(I64, ESCALA_PORCENTAJE)], name="r"), ta
-        if op == "/" and ta.nombre in escalados:
-            if tb == ENTERO:
-                return b_.call(self.div_redondeo, [a, b], name="r"), ta
-            if tb == DECIMAL:
-                return self._redondear(b_.fdiv(b_.sitofp(a, F64), b)), ta
-            if tb == ta:
-                return b_.fdiv(b_.sitofp(a, F64), b_.sitofp(b, F64), name="r"), DECIMAL
-        raise ErrorGeneracion(nodo, f"La operación '{op}' entre {ta} y {tb} se genera en el Hito 3.")
+            if tipo_derecha.nombre == "monto" or (tipo_derecha.nombre == "porcentaje" and tipo_izquierda.nombre != "monto"):
+                a, tipo_izquierda, b, tipo_derecha = b, tipo_derecha, a, tipo_izquierda
+            if tipo_derecha == ENTERO:
+                return builder_actual.mul(a, b, name="r"), tipo_izquierda
+            if tipo_derecha == DECIMAL:
+                return self._redondear(builder_actual.fmul(builder_actual.sitofp(a, F64), b)), tipo_izquierda
+            if tipo_derecha.nombre == "porcentaje":
+                prod = builder_actual.mul(a, b, name="prod")
+                return builder_actual.call(self.div_redondeo, [prod, ir.Constant(I64, ESCALA_PORCENTAJE)], name="r"), tipo_izquierda
+        if op == "/" and tipo_izquierda.nombre in escalados:
+            if tipo_derecha == ENTERO:
+                return builder_actual.call(self.div_redondeo, [a, b], name="r"), tipo_izquierda
+            if tipo_derecha == DECIMAL:
+                return self._redondear(builder_actual.fdiv(builder_actual.sitofp(a, F64), b)), tipo_izquierda
+            if tipo_derecha == tipo_izquierda:
+                return builder_actual.fdiv(builder_actual.sitofp(a, F64), builder_actual.sitofp(b, F64), name="r"), DECIMAL
+        raise ErrorGeneracion(nodo, f"La operación '{op}' entre {tipo_izquierda} y {tipo_derecha} se genera en el Hito 3.")
 
 
     def _sentencias_ctx(self, lista):
@@ -186,11 +186,11 @@ class LLVMVisitor(KipuVisitor):
         return resultado
 
     def _crear_funcion(self, regla):
-        sim = regla.simbolo
-        retorno = tipo_llvm(sim.tipo) if sim.tipo is not None else ir.VoidType()
-        parametros = [tipo_llvm(t) for t in sim.parametros]
-        funcion = ir.Function(self.modulo, ir.FunctionType(retorno, parametros), name=sim.nombre)
-        self.funciones[id(sim)] = funcion
+        simbolo = regla.simbolo
+        retorno = tipo_llvm(simbolo.tipo) if simbolo.tipo is not None else ir.VoidType()
+        parametros = [tipo_llvm(t) for t in simbolo.parametros]
+        funcion = ir.Function(self.modulo, ir.FunctionType(retorno, parametros), name=simbolo.nombre)
+        self.funciones[id(simbolo)] = funcion
 
     def visitPrograma(self, ctx):
         lista = ctx.listaSentencias()
@@ -201,11 +201,11 @@ class LLVMVisitor(KipuVisitor):
             lista = lista.listaSentencias()
 
         main = ir.Function(self.modulo, ir.FunctionType(I32, []), name="main")
-        self.fn = main
+        self.funcion_redondeo = main
         entrada = main.append_basic_block("entrada")
         cuerpo = main.append_basic_block("inicio")
         self.builder = ir.IRBuilder(cuerpo)
-        self.b_alloca = ir.IRBuilder(entrada)
+        self.builder_entrada = ir.IRBuilder(entrada)
         lista = ctx.listaSentencias()
         while lista.sentencia() is not None:
             sentencia = lista.sentencia()
@@ -214,7 +214,7 @@ class LLVMVisitor(KipuVisitor):
             lista = lista.listaSentencias()
         if not self.builder.block.is_terminated:
             self.builder.ret(ir.Constant(I32, 0))
-        self.b_alloca.branch(cuerpo)
+        self.builder_entrada.branch(cuerpo)
 
         lista = ctx.listaSentencias()
         while lista.sentencia() is not None:
@@ -231,36 +231,36 @@ class LLVMVisitor(KipuVisitor):
         self._sentencias_ctx(ctx.listaSentencias())
 
     def visitDeclaracion(self, ctx):
-        sim = ctx.simbolo
-        puntero = self._alloca(sim, sim.tipo)
+        simbolo = ctx.simbolo
+        puntero = self._alloca(simbolo, simbolo.tipo)
         expresion = ctx.expresion() if ctx.CONST() else ctx.inicializacion().expresion()
         if expresion is not None:
-            valor = self._convertir(self.visit(expresion), expresion.tipo_kipu, sim.tipo)
-        elif sim.tipo.nombre == "texto":
+            valor = self._convertir(self.visit(expresion), expresion.tipo_kipu, simbolo.tipo)
+        elif simbolo.tipo.nombre == "texto":
             valor = self._cadena("")
         else:
-            valor = ir.Constant(tipo_llvm(sim.tipo), 0)
+            valor = ir.Constant(tipo_llvm(simbolo.tipo), 0)
         self.builder.store(valor, puntero)
 
     def visitAsignacion(self, ctx):
-        sim = ctx.simbolo
-        puntero = self.variables[id(sim)]
+        simbolo = ctx.simbolo
+        puntero = self.variables[id(simbolo)]
         expresion = ctx.expresion()
         valor = self.visit(expresion)
         tipo_valor = expresion.tipo_kipu
         operador = ctx.opAsignacion().getText()
         if operador in ("+=", "-="):
-            actual = self.builder.load(puntero, name=sim.nombre)
-            valor, tipo_valor = self._aritmetica(operador[0], actual, sim.tipo, valor, tipo_valor, ctx)
-        self.builder.store(self._convertir(valor, tipo_valor, sim.tipo), puntero)
+            actual = self.builder.load(puntero, name=simbolo.nombre)
+            valor, tipo_valor = self._aritmetica(operador[0], actual, simbolo.tipo, valor, tipo_valor, ctx)
+        self.builder.store(self._convertir(valor, tipo_valor, simbolo.tipo), puntero)
 
     def visitSeleccion(self, ctx):
-        fin = self.fn.append_basic_block("si.fin")
+        fin = self.funcion_redondeo.append_basic_block("si.fin")
         actual = ctx
         hay_salida = False
         while True:
-            entonces = self.fn.append_basic_block("si.entonces")
-            siguiente = self.fn.append_basic_block("si.siguiente")
+            entonces = self.funcion_redondeo.append_basic_block("si.entonces")
+            siguiente = self.funcion_redondeo.append_basic_block("si.siguiente")
             condicion = self.visit(actual.expresion())
             self.builder.cbranch(condicion, entonces, siguiente)
             self.builder.position_at_end(entonces)
@@ -286,9 +286,9 @@ class LLVMVisitor(KipuVisitor):
 
     def visitIteracion(self, ctx):
         if ctx.MIENTRAS():
-            condicion = self.fn.append_basic_block("mientras.cond")
-            cuerpo = self.fn.append_basic_block("mientras.cuerpo")
-            fin = self.fn.append_basic_block("mientras.fin")
+            condicion = self.funcion_redondeo.append_basic_block("mientras.cond")
+            cuerpo = self.funcion_redondeo.append_basic_block("mientras.cuerpo")
+            fin = self.funcion_redondeo.append_basic_block("mientras.fin")
             self.builder.branch(condicion)
             self.builder.position_at_end(condicion)
             self.builder.cbranch(self.visit(ctx.expresion(0)), cuerpo, fin)
@@ -303,9 +303,9 @@ class LLVMVisitor(KipuVisitor):
         hasta = self.visit(ctx.expresion(1))
         paso_ctx = ctx.pasoOpcional().expresion()
         paso = self.visit(paso_ctx) if paso_ctx else ir.Constant(I64, 1)
-        condicion = self.fn.append_basic_block("para.cond")
-        cuerpo = self.fn.append_basic_block("para.cuerpo")
-        fin = self.fn.append_basic_block("para.fin")
+        condicion = self.funcion_redondeo.append_basic_block("para.cond")
+        cuerpo = self.funcion_redondeo.append_basic_block("para.cuerpo")
+        fin = self.funcion_redondeo.append_basic_block("para.fin")
         self.builder.branch(condicion)
         self.builder.position_at_end(condicion)
         actual = self.builder.load(puntero, name=ctx.ID().getText())
@@ -323,11 +323,11 @@ class LLVMVisitor(KipuVisitor):
         if id(ctx.simbolo) not in self.funciones:
             raise ErrorGeneracion(ctx, "Las reglas locales todavía no se generan en LLVM; declare la regla en el ámbito global.")
         funcion = self.funciones[id(ctx.simbolo)]
-        self.fn = funcion
+        self.funcion_redondeo = funcion
         entrada = funcion.append_basic_block("entrada")
         cuerpo = funcion.append_basic_block("inicio")
         self.builder = ir.IRBuilder(cuerpo)
-        self.b_alloca = ir.IRBuilder(entrada)
+        self.builder_entrada = ir.IRBuilder(entrada)
         for argumento, parametro in zip(funcion.args, self._parametros(ctx.parametros())):
             argumento.name = parametro.ID().getText()
             puntero = self._alloca(parametro.simbolo, parametro.simbolo.tipo)
@@ -338,14 +338,14 @@ class LLVMVisitor(KipuVisitor):
                 self.builder.ret_void()
             else:
                 raise ErrorGeneracion(ctx, "La regla no termina con retornar en este camino.")
-        self.b_alloca.branch(cuerpo)
+        self.builder_entrada.branch(cuerpo)
 
     def visitRetorno(self, ctx):
         expresion = ctx.valorRetorno().expresion()
         if expresion is None:
             self.builder.ret_void()
         else:
-            tipo_destino = self.fn.function_type.return_type
+            tipo_destino = self.funcion_redondeo.function_type.return_type
             valor = self.visit(expresion)
             if valor.type != tipo_destino:
                 valor = self.builder.sitofp(valor, tipo_destino)
@@ -356,11 +356,11 @@ class LLVMVisitor(KipuVisitor):
 
     def visitEntradaSalida(self, ctx):
         if ctx.LEER():
-            sim = ctx.simbolo
-            valor = self.builder.call(self.rt["leer_" + sim.tipo.nombre], [])
-            if sim.tipo.nombre == "booleano":
+            simbolo = ctx.simbolo
+            valor = self.builder.call(self.rt["leer_" + simbolo.tipo.nombre], [])
+            if simbolo.tipo.nombre == "booleano":
                 valor = self.builder.icmp_signed("!=", valor, ir.Constant(I32, 0))
-            self.builder.store(valor, self.variables[id(sim)])
+            self.builder.store(valor, self.variables[id(simbolo)])
             return
         argumentos = [ctx.expresion()]
         cola = ctx.argumentosCola()
@@ -407,8 +407,8 @@ class LLVMVisitor(KipuVisitor):
         if operador in ("y", "o"):
             primero = self.visit(izquierda)
             bloque_izquierdo = self.builder.block
-            bloque_derecho = self.fn.append_basic_block(f"{operador}.derecha")
-            bloque_final = self.fn.append_basic_block(f"{operador}.fin")
+            bloque_derecho = self.funcion_redondeo.append_basic_block(f"{operador}.derecha")
+            bloque_final = self.funcion_redondeo.append_basic_block(f"{operador}.fin")
             if operador == "y":
                 self.builder.cbranch(primero, bloque_derecho, bloque_final)
             else:
@@ -424,13 +424,13 @@ class LLVMVisitor(KipuVisitor):
             return resultado
         a = self.visit(izquierda)
         b = self.visit(derecha)
-        ta = izquierda.tipo_kipu
-        tb = derecha.tipo_kipu
+        tipo_izquierda = izquierda.tipo_kipu
+        tipo_derecha = derecha.tipo_kipu
         if operador in ("==", "!=", "<", "<=", ">", ">="):
-            return self._comparacion(operador, a, ta, b, tb)
-        if operador == "+" and ta.nombre == tb.nombre == "texto":
+            return self._comparacion(operador, a, tipo_izquierda, b, tipo_derecha)
+        if operador == "+" and tipo_izquierda.nombre == tipo_derecha.nombre == "texto":
             return self.builder.call(self.rt["texto_concatenar"], [a, b])
-        valor, _ = self._aritmetica(operador, a, ta, b, tb, ctx)
+        valor, _ = self._aritmetica(operador, a, tipo_izquierda, b, tipo_derecha, ctx)
         return valor
 
     def visitNegacion(self, ctx):

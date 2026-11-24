@@ -292,6 +292,24 @@ mostrar(fact(5)); aviso();'''
         self.assertTrue(res.ok, [str(e) for e in res.errores])
         self.assertEqual(ejecutar(res.ir, eco=False), (0, "3\n"))
 
+    def test_entrada_rechaza_porcentaje_y_entero_fuera_de_rango(self):
+        from ejecutor import ejecutar
+        original = sys.stdin
+        try:
+            for codigo, entrada in [
+                ("var p: porcentaje; leer(p);", "100.001%\n"),
+                ("var n: entero; leer(n);", "9223372036854775808\n"),
+                ("var p: porcentaje; leer(p);", "18%%\n"),
+            ]:
+                with self.subTest(entrada=entrada):
+                    res = compilar(codigo=codigo, hasta="llvm")
+                    self.assertTrue(res.ok)
+                    sys.stdin = io.StringIO(entrada)
+                    with self.assertRaisesRegex(ValueError, "Entrada Kipu inválida"):
+                        ejecutar(res.ir, eco=False)
+        finally:
+            sys.stdin = original
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

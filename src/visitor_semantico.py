@@ -116,21 +116,21 @@ class VisitorSemantico(KipuVisitor):
     def visitAsignacion(self, ctx):
         tipo_valor = self.visit(ctx.expresion())
         nombre = ctx.ID().getText()
-        sim = self.tabla.actual.buscar(nombre)
-        if sim is None:
+        simbolo = self.tabla.actual.buscar(nombre)
+        if simbolo is None:
             self._error("SEM-01", ctx.ID(), f"'{nombre}' no ha sido declarado.")
             return
-        ctx.simbolo = sim
-        if sim.categoria == "constante":
+        ctx.simbolo = simbolo
+        if simbolo.categoria == "constante":
             self._error("SEM-05", ctx.ID(), f"No se puede modificar la constante '{nombre}'.")
             return
-        if sim.categoria == "regla":
+        if simbolo.categoria == "regla":
             self._error("SEM-04", ctx.ID(), f"'{nombre}' es una regla y no puede recibir una asignación.")
             return
         op = ctx.opAsignacion().getText()
         if op in ("+=", "-="):
-            tipo_valor = self._tipo_binario(op[0], sim.tipo, tipo_valor, ctx.expresion())
-        self._asignable(sim.tipo, tipo_valor, ctx.expresion(), f"'{nombre}'")
+            tipo_valor = self._tipo_binario(op[0], simbolo.tipo, tipo_valor, ctx.expresion())
+        self._asignable(simbolo.tipo, tipo_valor, ctx.expresion(), f"'{nombre}'")
 
     def _condicion(self, ctx, donde):
         tipo = self.visit(ctx)
@@ -246,15 +246,15 @@ class VisitorSemantico(KipuVisitor):
                 cola = cola.argumentosCola()
             return
         nombre = ctx.ID().getText()
-        sim = self.tabla.actual.buscar(nombre)
-        if sim is None:
+        simbolo = self.tabla.actual.buscar(nombre)
+        if simbolo is None:
             self._error("SEM-01", ctx.ID(), f"'{nombre}' no ha sido declarado.")
-        elif sim.categoria == "constante":
+        elif simbolo.categoria == "constante":
             self._error("SEM-05", ctx.ID(), f"No se puede leer un valor sobre la constante '{nombre}'.")
-        elif sim.categoria == "regla":
+        elif simbolo.categoria == "regla":
             self._error("SEM-04", ctx.ID(), f"'{nombre}' es una regla; leer requiere una variable.")
         else:
-            ctx.simbolo = sim
+            ctx.simbolo = simbolo
 
     def visitExpresion(self, ctx):
         return self._binaria(ctx)
@@ -354,16 +354,16 @@ class VisitorSemantico(KipuVisitor):
             tipo = self.visit(ctx.literal())
         else:
             nombre = ctx.ID().getText()
-            sim = self.tabla.actual.buscar(nombre)
-            if sim is None:
+            simbolo = self.tabla.actual.buscar(nombre)
+            if simbolo is None:
                 self._error("SEM-01", ctx.ID(), f"'{nombre}' no ha sido declarado.")
                 tipo = None
-            elif sim.categoria == "regla":
+            elif simbolo.categoria == "regla":
                 self._error("SEM-04", ctx.ID(), f"'{nombre}' es una regla; debe invocarse con paréntesis.")
                 tipo = None
             else:
-                ctx.simbolo = sim
-                tipo = sim.tipo
+                ctx.simbolo = simbolo
+                tipo = simbolo.tipo
         ctx.tipo_kipu = tipo
         return tipo
 
@@ -390,24 +390,24 @@ class VisitorSemantico(KipuVisitor):
         argumentos = self._argumentos(ctx.argumentos())
         tipos = [self.visit(arg) for arg in argumentos]
         nombre = ctx.ID().getText()
-        sim = self.tabla.actual.buscar(nombre)
-        if sim is None:
+        simbolo = self.tabla.actual.buscar(nombre)
+        if simbolo is None:
             self._error("SEM-01", ctx.ID(), f"La regla '{nombre}' no ha sido declarada.")
             return None
-        if sim.categoria != "regla":
-            self._error("SEM-04", ctx.ID(), f"'{nombre}' es de tipo {sim.tipo} y no puede invocarse como regla.")
+        if simbolo.categoria != "regla":
+            self._error("SEM-04", ctx.ID(), f"'{nombre}' es de tipo {simbolo.tipo} y no puede invocarse como regla.")
             return None
-        ctx.simbolo = sim
-        if len(tipos) != len(sim.parametros):
-            self._error("SEM-09", ctx.ID(), f"La regla '{nombre}' espera {len(sim.parametros)} argumento(s) y recibió {len(tipos)}.")
+        ctx.simbolo = simbolo
+        if len(tipos) != len(simbolo.parametros):
+            self._error("SEM-09", ctx.ID(), f"La regla '{nombre}' espera {len(simbolo.parametros)} argumento(s) y recibió {len(tipos)}.")
         else:
-            for i, (esperado, recibido, arg) in enumerate(zip(sim.parametros, tipos, argumentos), 1):
+            for i, (esperado, recibido, arg) in enumerate(zip(simbolo.parametros, tipos, argumentos), 1):
                 if not self.compatible(esperado, recibido):
                     self._error("SEM-10", arg, f"Argumento {i} de '{nombre}': se esperaba {esperado} y se recibió {recibido}.")
-        if en_expresion and sim.tipo is None:
+        if en_expresion and simbolo.tipo is None:
             self._error("SEM-14", ctx.ID(), f"La regla '{nombre}' no retorna un valor y no puede usarse en una expresión.")
-        ctx.tipo_kipu = sim.tipo
-        return sim.tipo
+        ctx.tipo_kipu = simbolo.tipo
+        return simbolo.tipo
 
     def _comparar(self, op, izquierda, derecha, ctx):
         if izquierda is None or derecha is None:
