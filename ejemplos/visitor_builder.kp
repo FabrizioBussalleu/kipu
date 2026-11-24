@@ -1,4 +1,4 @@
-// El método visitAsignacion llama a IRBuilder.store y visitAritmetica a IRBuilder.add.
+// visitAsignacion conecta load, add y store del IRBuilder.
 var base: entero = 20;
 base += 2;
 mostrar(base);

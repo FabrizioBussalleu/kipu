@@ -16,13 +16,15 @@ Validación ampliada y preparación de entregables del Hito 3.
 - Se retiraron de la implementación activa el AST, su constructor y los módulos anteriores de semántica y LLVM.
 - LLVM genera reglas, llamadas, retornos, lectura, concatenación y variables globales.
 - Se verificó por JIT la recursión, retornos por ambas ramas, lectura de cinco tipos y el ejemplo tributario interactivo.
-- Pruebas actuales: 23 `unittest`, todas aprobadas.
+- Pruebas actuales: 28 `unittest`, todas aprobadas.
+- Se prepararon informe, guías, resultados de validación, guion de presentación y un ZIP limpio del repositorio.
 
 ## Pendiente
 
 - Buscar indicaciones oficiales y rúbrica; los informes del equipo solo enumeran próximos pasos, sin formato o límites oficiales verificables.
 - Ampliar pruebas de borde y revisar limitaciones de funciones anidadas y runtime C.
-- Preparar informe, guía, presentación y paquete de entrega.
+- El equipo debe obtener la consigna oficial, revisar formato/autoría y probar el runtime C con Clang.
+- Convertir los borradores Markdown a los formatos académicos exigidos una vez conocida la consigna.
 
 ## Archivos modificados
 
@@ -34,6 +36,9 @@ Validación ampliada y preparación de entregables del Hito 3.
 
 - `.\.venv\Scripts\python.exe -m unittest discover -s tests -v`: 20 pruebas, OK.
 - Después de la migración: mismo comando, 23 pruebas, OK.
+- Después de ampliar los escenarios: mismo comando, 28 pruebas, OK.
+- `scripts/verificar_gramatica.py`: L1 a L6, OK; `scripts/derivaciones.py`: 28 derivaciones, OK.
+- `scripts/empaquetar_hito3.py`: ZIP verificado sin `.venv`, cachés, `.ll` ni nombres sensibles.
 - `ejemplos/hito3_tributario.kp` con entrada `3`: `884.64 PEN` y `235.93 USD`.
 - `ejemplos/visitor_builder.kp`: salida `22`.
 
@@ -46,4 +51,4 @@ Validación ampliada y preparación de entregables del Hito 3.
 
 ## Siguiente acción
 
-Completar la validación, documentación y paquete local; registrar límites comprobados.
+Repetir la batería y el empaquetado tras los ajustes finales, revisar el estado Git y dejar los commits únicamente locales.

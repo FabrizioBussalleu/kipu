@@ -78,7 +78,7 @@ class LLVMVisitor(KipuVisitor):
 
     def _alloca(self, simbolo, tipo: Tipo):
         if simbolo.ambito == "global":
-            puntero = ir.GlobalVariable(self.modulo, tipo_llvm(tipo), name=simbolo.nombre)
+            puntero = ir.GlobalVariable(self.modulo, tipo_llvm(tipo), name=f"kipu.global.{simbolo.nombre}")
             puntero.initializer = ir.Constant(tipo_llvm(tipo), None)
             self.variables[id(simbolo)] = puntero
             return puntero
@@ -95,37 +95,37 @@ class LLVMVisitor(KipuVisitor):
             g.linkage = "private"
             g.initializer = ir.Constant(tipo, datos)
             self.cadenas[texto] = g
-        return self.b.bitcast(self.cadenas[texto], I8P)
+        return self.builder.bitcast(self.cadenas[texto], I8P)
 
     def _a_double(self, valor, tipo: Tipo):
-        return valor if tipo == DECIMAL else self.b.sitofp(valor, F64)
+        return valor if tipo == DECIMAL else self.builder.sitofp(valor, F64)
 
     def _redondear(self, valor_f64):
         """Redondeo half-up (alejándose de cero) a i64 sin depender de libm:
         x >= 0 -> trunc(x + 0.5);  x < 0 -> trunc(x - 0.5)."""
-        b = self.b
+        b = self.builder
         negativo = b.fcmp_ordered("<", valor_f64, ir.Constant(F64, 0.0), name="es_negativo")
         medio = b.select(negativo, ir.Constant(F64, -0.5), ir.Constant(F64, 0.5), name="medio")
         return b.fptosi(b.fadd(valor_f64, medio, name="ajustado"), I64, name="redondeado")
 
     def _convertir(self, valor, origen: Tipo, destino: Tipo):
         if origen == ENTERO and destino == DECIMAL:
-            return self.b.sitofp(valor, F64)
+            return self.builder.sitofp(valor, F64)
         return valor
 
     def _comparacion(self, op, a, ta, b, tb):
         if ta.es_numerico and tb.es_numerico and DECIMAL in (ta, tb):
-            return self.b.fcmp_ordered(op, self._a_double(a, ta), self._a_double(b, tb), name="cmp")
+            return self.builder.fcmp_ordered(op, self._a_double(a, ta), self._a_double(b, tb), name="cmp")
         if ta.nombre == "texto":
-            igual = self.b.icmp_signed("!=", self.b.call(self.rt["texto_igual"], [a, b]), ir.Constant(I32, 0))
-            return igual if op == "==" else self.b.not_(igual)
+            igual = self.builder.icmp_signed("!=", self.builder.call(self.rt["texto_igual"], [a, b]), ir.Constant(I32, 0))
+            return igual if op == "==" else self.builder.not_(igual)
         if ta.nombre == "booleano":
-            return self.b.icmp_unsigned(op, a, b, name="cmp")
-        return self.b.icmp_signed(op, a, b, name="cmp")
+            return self.builder.icmp_unsigned(op, a, b, name="cmp")
+        return self.builder.icmp_signed(op, a, b, name="cmp")
 
     def _aritmetica(self, op, a, ta, b, tb, nodo):
         """Devuelve (valor, tipo_resultado) siguiendo las reglas del sistema de tipos."""
-        b_ = self.b
+        b_ = self.builder
         if ta.es_numerico and tb.es_numerico:
             if op == "mod":
                 return b_.srem(a, b, name="mod"), ENTERO
@@ -205,7 +205,6 @@ class LLVMVisitor(KipuVisitor):
         entrada = main.append_basic_block("entrada")
         cuerpo = main.append_basic_block("inicio")
         self.builder = ir.IRBuilder(cuerpo)
-        self.b = self.builder
         self.b_alloca = ir.IRBuilder(entrada)
         lista = ctx.listaSentencias()
         while lista.sentencia() is not None:
@@ -321,12 +320,13 @@ class LLVMVisitor(KipuVisitor):
         self.builder.position_at_end(fin)
 
     def visitRegla(self, ctx):
+        if id(ctx.simbolo) not in self.funciones:
+            raise ErrorGeneracion(ctx, "Las reglas locales todavía no se generan en LLVM; declare la regla en el ámbito global.")
         funcion = self.funciones[id(ctx.simbolo)]
         self.fn = funcion
         entrada = funcion.append_basic_block("entrada")
         cuerpo = funcion.append_basic_block("inicio")
         self.builder = ir.IRBuilder(cuerpo)
-        self.b = self.builder
         self.b_alloca = ir.IRBuilder(entrada)
         for argumento, parametro in zip(funcion.args, self._parametros(ctx.parametros())):
             argumento.name = parametro.ID().getText()
@@ -478,6 +478,8 @@ class LLVMVisitor(KipuVisitor):
         return ir.Constant(I1, int(ctx.VERDADERO() is not None))
 
     def visitLlamada(self, ctx):
+        if id(ctx.simbolo) not in self.funciones:
+            raise ErrorGeneracion(ctx, "La llamada a una regla local todavía no se genera en LLVM.")
         funcion = self.funciones[id(ctx.simbolo)]
         valores = []
         for argumento, esperado in zip(self._argumentos(ctx.argumentos()), ctx.simbolo.parametros):

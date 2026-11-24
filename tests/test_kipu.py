@@ -187,13 +187,8 @@ class PruebasLLVM(unittest.TestCase):
                     self.assertEqual(salida, f.read())
                 self.assertEqual(codigo, 0)
 
-    def test_construccion_pendiente(self):
-        for ruta in archivos("llvm"):
-            if os.path.exists(ruta[:-3] + ".esperado"):
-                continue
-            with self.subTest(archivo=os.path.basename(ruta)):
-                res = compilar(ruta=ruta, hasta="llvm")
-                self.assertEqual(obtenido(res), esperado(ruta))
+    def test_todos_los_casos_llvm_tienen_salida_esperada(self):
+        self.assertTrue(all(os.path.exists(ruta[:-3] + ".esperado") for ruta in archivos("llvm")))
 
     def test_ejemplo_detracciones(self):
         from ejecutor import ejecutar
@@ -241,6 +236,61 @@ mostrar(nombre + ":", numero, importe, tasa, activo);'''
         res = compilar(codigo="mostrar(no_declarada);", hasta="llvm")
         self.assertEqual(res.codigos(), ["SEM-01"])
         self.assertIsNone(res.ir)
+
+    def test_programa_tributario_interactivo(self):
+        from ejecutor import ejecutar, verificar_ir
+        ruta = os.path.join(RAIZ, "ejemplos", "hito3_tributario.kp")
+        res = compilar(ruta=ruta, hasta="llvm")
+        self.assertTrue(res.ok, [str(e) for e in res.errores])
+        verificar_ir(res.ir)
+        original = sys.stdin
+        try:
+            sys.stdin = io.StringIO("3\n")
+            self.assertEqual(ejecutar(res.ir, eco=False),
+                             (0, "Total sujeto a detracción: 884.64 PEN\nEquivalente USD: 235.93 USD\n"))
+        finally:
+            sys.stdin = original
+
+    def test_entrada_decimal_y_error_controlado(self):
+        from ejecutor import ejecutar
+        res = compilar(codigo="var x: decimal; leer(x); mostrar(x);", hasta="llvm")
+        self.assertTrue(res.ok)
+        original = sys.stdin
+        try:
+            sys.stdin = io.StringIO("2.5\n")
+            self.assertEqual(ejecutar(res.ir, eco=False), (0, "2.5\n"))
+            sys.stdin = io.StringIO("abc\n")
+            with self.assertRaisesRegex(ValueError, "Entrada Kipu inválida"):
+                ejecutar(res.ir, eco=False)
+        finally:
+            sys.stdin = original
+
+    def test_recursion_y_regla_sin_valor(self):
+        from ejecutor import ejecutar
+        codigo = '''regla fact(n: entero): entero {
+    si (n <= 1) { retornar 1; }
+    sino { retornar n * fact(n - 1); }
+}
+regla aviso() { mostrar("listo"); retornar; }
+mostrar(fact(5)); aviso();'''
+        res = compilar(codigo=codigo, hasta="llvm")
+        self.assertTrue(res.ok, [str(e) for e in res.errores])
+        self.assertEqual(ejecutar(res.ir, eco=False), (0, "120\nlisto\n"))
+
+    def test_regla_local_informa_limite_sin_fallar_el_driver(self):
+        codigo = '''si (verdadero) {
+    regla local(): entero { retornar 1; }
+    mostrar(local());
+}'''
+        res = compilar(codigo=codigo, hasta="llvm")
+        self.assertEqual(res.codigos(), ["GEN-01"])
+        self.assertIsNone(res.ir)
+
+    def test_variable_global_no_colisiona_con_main(self):
+        from ejecutor import ejecutar
+        res = compilar(codigo="var main: entero = 3; mostrar(main);", hasta="llvm")
+        self.assertTrue(res.ok, [str(e) for e in res.errores])
+        self.assertEqual(ejecutar(res.ir, eco=False), (0, "3\n"))
 
 
 if __name__ == "__main__":

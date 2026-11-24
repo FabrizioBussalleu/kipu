@@ -23,7 +23,7 @@ var enDolares: monto<USD> = convertir(total, USD, 0.2667);
 |---|---|---|
 | 1 | Analizadores léxico, sintáctico y semántico parcial en ANTLR4 | Entregado |
 | 2 | Gramática actualizada (forma estándar), semántico completo (14 errores), arquitectura, plan de validación, avance de LLVM IR | Entregado |
-| 3 | Generación de código completa con LLVM, resultados de la validación y conclusiones | Semana 15 |
+| 3 | Visitors directos, generación LLVM ampliada, ejecución JIT y validación local | En preparación; entrega sujeta a revisión del equipo |
 
 ## Requisitos
 
@@ -33,27 +33,30 @@ var enDolares: monto<USD> = convertir(total, USD, 0.2667);
 
 ## Instalación
 
-En PowerShell (Windows):
+En PowerShell (Windows 11):
 
 ```powershell
 cd kipu
-python -m pip install -r requirements.txt
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ## Uso
 
 ```powershell
-python src/kipu.py ejemplos/facturacion.kp                 # front end completo
+.\.venv\Scripts\python.exe src/kipu.py ejemplos/facturacion.kp                 # front end completo
 python src/kipu.py ejemplos/facturacion.kp --tokens        # tabla de tokens (léxico)
 python src/kipu.py ejemplos/facturacion.kp --arbol         # árbol sintáctico
 python src/kipu.py ejemplos/facturacion.kp --simbolos      # tabla de símbolos
 python src/kipu.py ejemplos/detracciones.kp --llvm         # genera ejemplos/detracciones.ll
-python src/kipu.py ejemplos/detracciones.kp --ejecutar     # genera el IR y lo ejecuta (JIT)
+.\.venv\Scripts\python.exe src/kipu.py ejemplos/detracciones.kp --ejecutar     # genera el IR y lo ejecuta (JIT)
+.\.venv\Scripts\python.exe src/kipu.py ejemplos/visitor_builder.kp --ejecutar
+'3' | .\.venv\Scripts\python.exe src/kipu.py ejemplos/hito3_tributario.kp --ejecutar
 ```
 
 Opciones adicionales: `--solo-lexico` y `--solo-sintactico`. El programa devuelve 0 si no hay errores y 1 si los hay.
 
-Ejecutable nativo (opcional, requiere clang): `clang ejemplos/detracciones.ll runtime/kipu_runtime.c -o detracciones`.
+Ejecutable nativo (opcional, requiere Clang): `clang ejemplos/detracciones.ll runtime/kipu_runtime.c -o detracciones.exe`. En la validación local de Windows de esta rama Clang no estaba disponible, por lo que ese comando no se verificó.
 
 ### Códigos de error
 
@@ -75,7 +78,7 @@ Ejecutable nativo (opcional, requiere clang): `clang ejemplos/detracciones.ll ru
 | SEM-12 | Semántico | Porcentaje fuera de rango (0 % a 100 %) |
 | SEM-13 | Semántico | División entre cero literal |
 | SEM-14 | Semántico | Regla sin valor usada en una expresión |
-| GEN-01 | Generación | Construcción cuya generación LLVM se completa en el Hito 3 |
+| GEN-01 | Generación | Fallo al construir o verificar LLVM IR |
 
 ## Gramática
 
@@ -103,14 +106,14 @@ kipu/
 ├── src/
 │   ├── kipu.py                   driver del compilador
 │   ├── errores.py                errores léxicos y sintácticos en español
-│   ├── ast_kipu.py               nodos del AST y tipos
-│   ├── constructor_ast.py        árbol de ANTLR -> AST
-│   ├── semantico.py              analizador semántico y tabla de símbolos
-│   ├── generador_llvm.py         generación de LLVM IR (llvmlite)
-│   ├── ejecutor.py               ejecución JIT y runtime de salida
+│   ├── tipos_kipu.py             tipos y escalas del lenguaje
+│   ├── tabla_simbolos.py         símbolos y ámbitos
+│   ├── visitor_semantico.py      análisis directo del árbol ANTLR
+│   ├── visitor_llvm.py           LLVMVisitor con IRBuilder
+│   ├── ejecutor.py               ejecución JIT y runtime de entrada y salida
 │   └── generated/                parser generado por ANTLR 4.13.2 (Python3)
 ├── runtime/kipu_runtime.c        runtime para ejecutables nativos
-├── ejemplos/                     facturacion.kp, detracciones.kp
+├── ejemplos/                     facturación, detracciones y demostraciones del Hito 3
 ├── tests/                        lexico, sintactico, semantico, llvm, construcciones.py, test_kipu.py
 ├── scripts/                      verificar_gramatica.py, gramatica_bnf.py, derivaciones.py, generar_parser.*
 ├── lib/antlr-4.13.2-complete.jar
@@ -118,6 +121,7 @@ kipu/
 └── docs/
     ├── hito1/                    informe, anexo, presentación y guiones del Hito 1
     ├── hito2/                    informe, anexo, presentación, guiones y preguntas del Hito 2
+    ├── hito3/                    borradores y resultados verificables del Hito 3
     ├── anexo_derivaciones.md     derivaciones vigentes (generadas)
     └── derivaciones.json
 ```
@@ -130,3 +134,9 @@ kipu/
 - Guion de la presentación, guion del video y preguntas probables
 
 Entregables del Hito 1 (`docs/hito1/`): `Informe_TrabajoParcial_Kipu.pdf`, `Presentacion_Kipu.pdf` y el enlace al video en `Enlace_Video_Demo.txt`.
+
+## Arquitectura actual
+
+`KipuLexer → KipuParser → árbol ANTLR → VisitorSemantico → LLVMVisitor + IRBuilder → LLVM IR → verificación → JIT`. Ambos Visitors heredan directamente de `KipuVisitor`. Los contextos del parser guardan las anotaciones `tipo_kipu` y `simbolo`, que el generador consulta sin construir un AST adicional. La migración respondió a la observación del profesor sobre la conexión entre Visitor y Builder.
+
+La generación de reglas, retornos, llamadas, `leer` y concatenación de textos ya se verifica mediante JIT en Windows. El runtime de C permite preparar ejecutables nativos, pero falta comprobarlo con Clang en un equipo que lo tenga instalado. Las indicaciones y la rúbrica oficiales del Hito 3 no están en este repositorio; el equipo debe contrastar los borradores de `docs/hito3/` antes de entregar.
